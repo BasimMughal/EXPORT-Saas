@@ -1,0 +1,200 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { Types } from 'mongoose';
+
+import { requireSession } from '@/lib/auth/session';
+import { getErrorMessage } from '@/lib/errors';
+import { connectMongoose } from '@/lib/db/mongoose';
+import { generateOrderNumber } from '@/lib/orders/order-number';
+import { orderSchema, type OrderValues } from '@/lib/validations/order';
+import { CustomerModel } from '@/models/customer.model';
+import { OrderModel } from '@/models/order.model';
+
+type ActionState = {
+  ok: boolean;
+  message: string;
+  fieldErrors?: Partial<Record<keyof OrderValues, string>>;
+};
+
+const initialState: ActionState = {
+  ok: false,
+  message: '',
+};
+
+function parseFormData(formData: FormData) {
+  return {
+    customerId: formData.get('customerId'),
+    productName: formData.get('productName'),
+    description: formData.get('description'),
+    quantity: formData.get('quantity'),
+    receivedAmount: formData.get('receivedAmount'),
+    orderDate: formData.get('orderDate'),
+    deliveryDate: formData.get('deliveryDate'),
+    status: formData.get('status'),
+    notes: formData.get('notes'),
+  };
+}
+
+function buildFieldErrors(errors: Record<string, string[] | undefined>) {
+  return {
+    customerId: errors.customerId?.[0],
+    productName: errors.productName?.[0],
+    description: errors.description?.[0],
+    quantity: errors.quantity?.[0],
+    receivedAmount: errors.receivedAmount?.[0],
+    orderDate: errors.orderDate?.[0],
+    deliveryDate: errors.deliveryDate?.[0],
+    status: errors.status?.[0],
+    notes: errors.notes?.[0],
+  };
+}
+
+async function verifyCustomerOwnership(customerId: string, userId: string) {
+  const customer = await CustomerModel.findOne({
+    _id: new Types.ObjectId(customerId),
+    userId: new Types.ObjectId(userId),
+  })
+    .select('_id')
+    .lean();
+
+  return Boolean(customer);
+}
+
+export async function createOrderAction(_: ActionState = initialState, formData: FormData) {
+  try {
+    const session = await requireSession();
+    const parsed = orderSchema.safeParse(parseFormData(formData));
+
+    if (!parsed.success) {
+      return {
+        ok: false,
+        message: 'Please fix the highlighted fields.',
+        fieldErrors: buildFieldErrors(parsed.error.flatten().fieldErrors),
+      };
+    }
+
+    await connectMongoose();
+
+    const hasCustomer = await verifyCustomerOwnership(parsed.data.customerId, session.user.id);
+    if (!hasCustomer) {
+      return {
+        ok: false,
+        message: 'Selected customer was not found.',
+        fieldErrors: {
+          customerId: 'Selected customer was not found.',
+        },
+      };
+    }
+
+    const orderNumber = await generateOrderNumber(session.user.id);
+
+    await OrderModel.create({
+      userId: new Types.ObjectId(session.user.id),
+      customerId: new Types.ObjectId(parsed.data.customerId),
+      orderNumber,
+      productName: parsed.data.productName,
+      description: parsed.data.description ?? '',
+      quantity: parsed.data.quantity,
+      receivedAmount: parsed.data.receivedAmount,
+      orderDate: parsed.data.orderDate,
+      deliveryDate: parsed.data.deliveryDate ?? null,
+      status: parsed.data.status,
+      notes: parsed.data.notes ?? '',
+    });
+
+    revalidatePath('/orders');
+    redirect('/orders?created=1');
+  } catch (error) {
+    return {
+      ok: false,
+      message: getErrorMessage(error, 'Unable to create order right now.'),
+    };
+  }
+}
+
+export async function updateOrderAction(
+  orderId: string,
+  _: ActionState = initialState,
+  formData: FormData,
+) {
+  try {
+    const session = await requireSession();
+    const parsed = orderSchema.safeParse(parseFormData(formData));
+
+    if (!parsed.success) {
+      return {
+        ok: false,
+        message: 'Please fix the highlighted fields.',
+        fieldErrors: buildFieldErrors(parsed.error.flatten().fieldErrors),
+      };
+    }
+
+    await connectMongoose();
+
+    const hasCustomer = await verifyCustomerOwnership(parsed.data.customerId, session.user.id);
+    if (!hasCustomer) {
+      return {
+        ok: false,
+        message: 'Selected customer was not found.',
+        fieldErrors: {
+          customerId: 'Selected customer was not found.',
+        },
+      };
+    }
+
+    const updated = await OrderModel.findOneAndUpdate(
+      {
+        _id: new Types.ObjectId(orderId),
+        userId: new Types.ObjectId(session.user.id),
+      },
+      {
+        $set: {
+          customerId: new Types.ObjectId(parsed.data.customerId),
+          productName: parsed.data.productName,
+          description: parsed.data.description ?? '',
+          quantity: parsed.data.quantity,
+          receivedAmount: parsed.data.receivedAmount,
+          orderDate: parsed.data.orderDate,
+          deliveryDate: parsed.data.deliveryDate ?? null,
+          status: parsed.data.status,
+          notes: parsed.data.notes ?? '',
+        },
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      return {
+        ok: false,
+        message: 'Order not found.',
+      };
+    }
+
+    revalidatePath('/orders');
+    redirect('/orders?updated=1');
+  } catch (error) {
+    return {
+      ok: false,
+      message: getErrorMessage(error, 'Unable to update order right now.'),
+    };
+  }
+}
+
+export async function deleteOrderAction(orderId: string, _formData: FormData) {
+  const session = await requireSession();
+
+  await connectMongoose();
+  const deleted = await OrderModel.findOneAndDelete({
+    _id: new Types.ObjectId(orderId),
+    userId: new Types.ObjectId(session.user.id),
+  });
+
+  if (!deleted) {
+    redirect('/orders?error=not_found');
+  }
+
+  revalidatePath('/orders');
+  redirect('/orders?deleted=1');
+}

@@ -1,0 +1,24 @@
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+
+import { auth } from '@/auth';
+import { SignInForm } from '@/components/shared/auth/sign-in-form';
+import { siteConfig } from '@/config/site';
+
+export const metadata: Metadata = {
+  title: `Sign In | ${siteConfig.name}`,
+};
+
+export default async function SignInPage() {
+  const session = await auth();
+
+  if (session?.user) {
+    redirect('/dashboard');
+  }
+
+  return (
+    <div className="w-full max-w-md">
+      <SignInForm />
+    </div>
+  );
+}
