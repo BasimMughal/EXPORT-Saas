@@ -1,5 +1,4 @@
 export const siteConfig = {
-  name: 'Export Management',
-  description: 'Production-ready export management SaaS foundation.',
+  name: 'ExportFlow',
+  description: 'Modern export operations platform for orders, customers, and shipment workflows.',
 };
-

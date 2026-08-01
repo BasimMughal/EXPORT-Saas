@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { CurrencySelect } from '@/components/shared/currency-select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { ORDER_STATUSES, type OrderValues } from '@/lib/validations/order';
 import { formatDateInput } from '@/lib/formatters';
+import type { CurrencyCode } from '@/config/currency';
 
 type ActionState = {
   ok: boolean;
@@ -28,7 +30,8 @@ type OrderFormValues = {
   productName?: string;
   description?: string;
   quantity?: string;
-  receivedAmount?: string;
+  orderValue?: string;
+  currency?: CurrencyCode | string;
   orderDate?: string;
   deliveryDate?: string;
   status?: string;
@@ -115,17 +118,36 @@ export function OrderForm({ title, description, submitLabel, action, customers, 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="receivedAmount">Received Amount</Label>
+              <Label htmlFor="orderValue">Order Value</Label>
               <Input
-                id="receivedAmount"
-                name="receivedAmount"
+                id="orderValue"
+                name="orderValue"
                 type="number"
                 step="0.01"
                 min="0"
-                defaultValue={initialValues?.receivedAmount ?? '0'}
+                defaultValue={initialValues?.orderValue ?? '0'}
               />
-              {state.fieldErrors?.receivedAmount ? (
-                <p className="text-sm text-destructive">{state.fieldErrors.receivedAmount}</p>
+              <p className="text-xs text-muted-foreground">
+                Total contract amount. Payments are recorded separately.
+              </p>
+              {state.fieldErrors?.orderValue ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.orderValue}</p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency</Label>
+              <CurrencySelect
+                id="currency"
+                name="currency"
+                defaultValue={(initialValues?.currency as CurrencyCode) ?? 'PKR'}
+                className="h-10 rounded-md"
+              />
+              <p className="text-xs text-muted-foreground">
+                All payments and order expenses stay in this currency. No conversion inside the order.
+              </p>
+              {state.fieldErrors?.currency ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.currency}</p>
               ) : null}
             </div>
 

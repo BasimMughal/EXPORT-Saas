@@ -13,6 +13,7 @@ import { DeleteOrderButton } from '@/components/shared/orders/delete-order-butto
 import { OrderStatusBadge } from '@/components/shared/orders/order-status-badge';
 import { deleteOrderAction } from '@/app/(app)/orders/actions';
 import { formatCurrency, formatDateDisplay } from '@/lib/formatters';
+import type { CurrencyCode } from '@/config/currency';
 
 type OrderRow = {
   id: string;
@@ -20,7 +21,8 @@ type OrderRow = {
   customerName: string;
   productName: string;
   quantity: number;
-  receivedAmount: number;
+  orderValue: number;
+  currency?: CurrencyCode | string;
   orderDate: string;
   deliveryDate: string;
   status: 'pending' | 'in_progress' | 'completed' | 'abandoned';
@@ -41,7 +43,7 @@ export function OrderTable({ rows }: OrderTableProps) {
             <TableHead>Customer</TableHead>
             <TableHead>Product</TableHead>
             <TableHead>Qty</TableHead>
-            <TableHead>Received</TableHead>
+            <TableHead>Order Value</TableHead>
             <TableHead>Order Date</TableHead>
             <TableHead>Delivery Date</TableHead>
             <TableHead>Status</TableHead>
@@ -54,9 +56,13 @@ export function OrderTable({ rows }: OrderTableProps) {
               <TableRow key={order.id}>
                 <TableCell className="font-medium">
                   <div className="space-y-1">
-                    <p>{order.orderNumber}</p>
+                    <Link href={`/orders/${order.id}`} className="hover:underline">
+                      {order.orderNumber}
+                    </Link>
                     {order.notes ? (
-                      <p className="max-w-[260px] truncate text-xs text-muted-foreground">{order.notes}</p>
+                      <p className="max-w-[260px] truncate text-xs text-muted-foreground">
+                        {order.notes}
+                      </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">No notes</p>
                     )}
@@ -64,13 +70,10 @@ export function OrderTable({ rows }: OrderTableProps) {
                 </TableCell>
                 <TableCell>{order.customerName}</TableCell>
                 <TableCell>
-                  <div className="space-y-1">
-                    <p className="font-medium">{order.productName}</p>
-                    {order.notes ? <p className="max-w-[260px] truncate text-xs text-muted-foreground">{order.notes}</p> : null}
-                  </div>
+                  <p className="font-medium">{order.productName}</p>
                 </TableCell>
                 <TableCell>{order.quantity}</TableCell>
-                <TableCell>{formatCurrency(order.receivedAmount)}</TableCell>
+                <TableCell>{formatCurrency(order.orderValue, order.currency)}</TableCell>
                 <TableCell>{formatDateDisplay(order.orderDate)}</TableCell>
                 <TableCell>{formatDateDisplay(order.deliveryDate)}</TableCell>
                 <TableCell>
@@ -78,6 +81,9 @@ export function OrderTable({ rows }: OrderTableProps) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/orders/${order.id}`}>View</Link>
+                    </Button>
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/orders/${order.id}/edit`}>Edit</Link>
                     </Button>

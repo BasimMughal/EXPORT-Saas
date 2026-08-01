@@ -50,7 +50,9 @@ export default async function EditOrderPage({
       productName: string;
       description?: string | null;
       quantity: number;
-      receivedAmount: number;
+      orderValue?: number;
+      receivedAmount?: number;
+      currency?: string;
       orderDate: Date;
       deliveryDate: Date | null;
       status: 'pending' | 'in_progress' | 'completed' | 'abandoned';
@@ -98,7 +100,8 @@ export default async function EditOrderPage({
           productName: order.productName,
           description: order.description ?? '',
           quantity: String(order.quantity),
-          receivedAmount: String(order.receivedAmount),
+          orderValue: String(order.orderValue ?? order.receivedAmount ?? 0),
+          currency: order.currency ?? 'PKR',
           orderDate: formatDateInput(order.orderDate),
           deliveryDate: formatDateInput(order.deliveryDate),
           status: order.status,

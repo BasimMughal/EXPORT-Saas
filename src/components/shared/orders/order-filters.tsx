@@ -53,7 +53,7 @@ export function OrderFilters({
         <option value="orderNumber">Order number</option>
         <option value="productName">Product name</option>
         <option value="quantity">Quantity</option>
-        <option value="receivedAmount">Received amount</option>
+        <option value="orderValue">Order value</option>
         <option value="orderDate">Order date</option>
         <option value="deliveryDate">Delivery date</option>
         <option value="status">Status</option>

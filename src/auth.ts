@@ -4,6 +4,7 @@ import type { Types } from 'mongoose';
 
 import { env } from '@/env';
 import { ROLE_PERMISSIONS, type Role } from '@/lib/auth/authorization';
+import { matchDemoCredentials } from '@/lib/auth/demo';
 import { verifyPassword } from '@/lib/auth/password';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { signInSchema } from '@/lib/validations/auth';
@@ -47,7 +48,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        await connectMongoose();
+        const demoUser = matchDemoCredentials(parsed.data.email, parsed.data.password);
+        if (demoUser) {
+          return demoUser;
+        }
+
+        try {
+          await connectMongoose();
+        } catch {
+          return null;
+        }
 
         const user = (await UserModel.findOne({
           email: parsed.data.email.toLowerCase(),

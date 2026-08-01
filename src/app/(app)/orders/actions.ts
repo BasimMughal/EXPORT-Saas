@@ -11,6 +11,8 @@ import { generateOrderNumber } from '@/lib/orders/order-number';
 import { orderSchema, type OrderValues } from '@/lib/validations/order';
 import { CustomerModel } from '@/models/customer.model';
 import { OrderModel } from '@/models/order.model';
+import { PaymentModel } from '@/models/payment.model';
+import { ExpenseModel } from '@/models/expense.model';
 
 type ActionState = {
   ok: boolean;
@@ -29,7 +31,8 @@ function parseFormData(formData: FormData) {
     productName: formData.get('productName'),
     description: formData.get('description'),
     quantity: formData.get('quantity'),
-    receivedAmount: formData.get('receivedAmount'),
+    orderValue: formData.get('orderValue'),
+    currency: formData.get('currency') || 'PKR',
     orderDate: formData.get('orderDate'),
     deliveryDate: formData.get('deliveryDate'),
     status: formData.get('status'),
@@ -43,7 +46,8 @@ function buildFieldErrors(errors: Record<string, string[] | undefined>) {
     productName: errors.productName?.[0],
     description: errors.description?.[0],
     quantity: errors.quantity?.[0],
-    receivedAmount: errors.receivedAmount?.[0],
+    orderValue: errors.orderValue?.[0],
+    currency: errors.currency?.[0],
     orderDate: errors.orderDate?.[0],
     deliveryDate: errors.deliveryDate?.[0],
     status: errors.status?.[0],
@@ -97,7 +101,8 @@ export async function createOrderAction(_: ActionState = initialState, formData:
       productName: parsed.data.productName,
       description: parsed.data.description ?? '',
       quantity: parsed.data.quantity,
-      receivedAmount: parsed.data.receivedAmount,
+      orderValue: parsed.data.orderValue,
+      currency: parsed.data.currency,
       orderDate: parsed.data.orderDate,
       deliveryDate: parsed.data.deliveryDate ?? null,
       status: parsed.data.status,
@@ -105,6 +110,8 @@ export async function createOrderAction(_: ActionState = initialState, formData:
     });
 
     revalidatePath('/orders');
+    revalidatePath('/dashboard');
+    revalidatePath('/payments');
     redirect('/orders?created=1');
   } catch (error) {
     return {
@@ -155,7 +162,8 @@ export async function updateOrderAction(
           productName: parsed.data.productName,
           description: parsed.data.description ?? '',
           quantity: parsed.data.quantity,
-          receivedAmount: parsed.data.receivedAmount,
+          orderValue: parsed.data.orderValue,
+          currency: parsed.data.currency,
           orderDate: parsed.data.orderDate,
           deliveryDate: parsed.data.deliveryDate ?? null,
           status: parsed.data.status,
@@ -173,6 +181,9 @@ export async function updateOrderAction(
     }
 
     revalidatePath('/orders');
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath('/dashboard');
+    revalidatePath('/payments');
     redirect('/orders?updated=1');
   } catch (error) {
     return {
@@ -184,17 +195,30 @@ export async function updateOrderAction(
 
 export async function deleteOrderAction(orderId: string, _formData: FormData) {
   const session = await requireSession();
+  const userObjectId = new Types.ObjectId(session.user.id);
+  const orderObjectId = new Types.ObjectId(orderId);
 
   await connectMongoose();
   const deleted = await OrderModel.findOneAndDelete({
-    _id: new Types.ObjectId(orderId),
-    userId: new Types.ObjectId(session.user.id),
+    _id: orderObjectId,
+    userId: userObjectId,
   });
 
   if (!deleted) {
     redirect('/orders?error=not_found');
   }
 
+  await Promise.all([
+    PaymentModel.deleteMany({ orderId: orderObjectId, userId: userObjectId }),
+    ExpenseModel.updateMany(
+      { orderId: orderObjectId, userId: userObjectId },
+      { $set: { orderId: null } },
+    ),
+  ]);
+
   revalidatePath('/orders');
+  revalidatePath('/payments');
+  revalidatePath('/expenses');
+  revalidatePath('/dashboard');
   redirect('/orders?deleted=1');
 }

@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { signUpSchema, type SignUpValues } from '@/lib/validations/user';
@@ -76,69 +75,94 @@ export function SignUpForm() {
   });
 
   return (
-    <Card className="border-border/70 bg-card/90 shadow-2xl backdrop-blur">
-      <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl">Create your account</CardTitle>
-        <CardDescription>Set up secure access to your export workspace.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-4" onSubmit={onSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="name">Full name</Label>
-            <Input id="name" autoComplete="name" {...form.register('name')} />
-            {form.formState.errors.name ? (
-              <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-            ) : null}
+    <div className="glass-panel w-full max-w-md rounded-3xl p-7 text-foreground md:p-8">
+      <div className="mb-7 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Get started</p>
+        <h2 className="font-display text-3xl font-semibold tracking-tight">Create account</h2>
+        <p className="text-sm text-muted-foreground">Set up secure access to your export workspace.</p>
+      </div>
+
+      <form className="space-y-4" onSubmit={onSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="name">Full name</Label>
+          <Input
+            id="name"
+            autoComplete="name"
+            placeholder="Basim Mughal"
+            className="h-11 rounded-xl bg-white"
+            {...form.register('name')}
+          />
+          {form.formState.errors.name ? (
+            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@company.com"
+            className="h-11 rounded-xl bg-white"
+            {...form.register('email')}
+          />
+          {form.formState.errors.email ? (
+            <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Min. 8 characters"
+            className="h-11 rounded-xl bg-white"
+            {...form.register('password')}
+          />
+          {form.formState.errors.password ? (
+            <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirm password</Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Repeat password"
+            className="h-11 rounded-xl bg-white"
+            {...form.register('confirmPassword')}
+          />
+          {form.formState.errors.confirmPassword ? (
+            <p className="text-sm text-destructive">{form.formState.errors.confirmPassword.message}</p>
+          ) : null}
+        </div>
+
+        {formError ? (
+          <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {formError}
           </div>
+        ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-            {form.formState.errors.email ? (
-              <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-            ) : null}
-          </div>
+        <Button
+          className="h-11 w-full rounded-xl shadow-md shadow-primary/20"
+          type="submit"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? 'Creating account...' : 'Create account'}
+        </Button>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              {...form.register('password')}
-            />
-            {form.formState.errors.password ? (
-              <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              {...form.register('confirmPassword')}
-            />
-            {form.formState.errors.confirmPassword ? (
-              <p className="text-sm text-destructive">{form.formState.errors.confirmPassword.message}</p>
-            ) : null}
-          </div>
-
-          {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-
-          <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Creating account...' : 'Create account'}
-          </Button>
-
-          <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link className="font-medium text-foreground underline-offset-4 hover:underline" href="/sign-in">
-              Sign in
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+        <p className="text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link className="font-semibold text-primary underline-offset-4 hover:underline" href="/sign-in">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </div>
   );
 }

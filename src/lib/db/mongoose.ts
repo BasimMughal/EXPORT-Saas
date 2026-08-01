@@ -25,14 +25,28 @@ export async function connectMongoose() {
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(env.MONGODB_URI, {
-      dbName: env.MONGODB_DB,
-      bufferCommands: false,
-    });
+    cached.promise = mongoose
+      .connect(env.MONGODB_URI, {
+        dbName: env.MONGODB_DB,
+        bufferCommands: false,
+        serverSelectionTimeoutMS: 2500,
+      })
+      .catch((error) => {
+        cached.promise = null;
+        throw error;
+      });
   }
 
   cached.conn = await cached.promise;
   return cached.conn;
+}
+
+export async function tryConnectMongoose() {
+  try {
+    return await connectMongoose();
+  } catch {
+    return null;
+  }
 }
 
 export async function disconnectMongoose() {

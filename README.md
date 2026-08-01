@@ -1,29 +1,50 @@
-# Export Management SaaS Foundation
+# ExportFlow
 
-Production-ready scaffold for a Next.js 15 export management application.
+Premium export management SaaS for garment exporters.
 
 ## Stack
 
-- Next.js 15 App Router
-- TypeScript strict mode
-- Tailwind CSS
-- shadcn/ui primitives
-- Auth.js
-- MongoDB Community Server
-- MongoDB Compass
-- Mongoose
-- React Hook Form
-- Zod
-- Vercel-ready deployment configuration
+- Next.js 15 App Router + TypeScript
+- Auth.js credentials auth
+- MongoDB + Mongoose (with offline demo data mode)
+- Tailwind CSS + shadcn/ui
+- Recharts, Sonner, jsPDF, SheetJS
+
+## Modules
+
+- Authentication + demo account
+- Dashboard (KPIs, charts, timeline)
+- Customers
+- Orders
+- Expenses + categories
+- Profit analytics
+- Reports (PDF / Excel / CSV)
+- Profile
 
 ## Setup
 
-1. Install dependencies.
-2. Create your `.env.local` from `.env.example`.
-3. Run `npm run dev`.
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-## Notes
+### Demo login (no Mongo required)
 
-- Business modules are intentionally not added yet.
-- Authentication is configured with Auth.js credentials flow.
-- MongoDB is wired through both native driver utilities and Mongoose caching helpers.
+- Email: `demo@exportflow.com`
+- Password: `Demo@12345`
+
+### With MongoDB
+
+```bash
+# Start Mongo, then:
+npm run seed:demo
+```
+
+## Scripts
+
+- `npm run dev` — development server
+- `npm run build` — production build
+- `npm run test` — unit tests
+- `npm run typecheck` — TypeScript check
+- `npm run seed:demo` — seed Mongo admin user
