@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { DEFAULT_CURRENCY, type CurrencyCode } from '@/config/currency';
 import { isDemoUserId } from '@/lib/auth/demo';
 import { requireSession } from '@/lib/auth/session';
-import { demoStore } from '@/lib/demo/store';
 import { tryConnectMongoose } from '@/lib/db/mongoose';
 import { ExpenseModel } from '@/models/expense.model';
 import { ExpenseCategoryModel } from '@/models/expense-category.model';
