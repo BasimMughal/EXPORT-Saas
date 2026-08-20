@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "mongo": "node scripts/start-mongo.mjs",
-    "seed:demo": "node scripts/seed-demo-user.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

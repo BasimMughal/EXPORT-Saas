@@ -16,7 +16,6 @@ import {
   ProfitBarChart,
   RevenueExpenseChart,
 } from '@/components/shared/dashboard/charts';
-import { DemoModeBanner } from '@/components/shared/demo-mode-banner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -83,8 +82,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="animate-fade-up space-y-8">
-      {data.source === 'demo' ? <DemoModeBanner /> : null}
-
       <PageHeader
         title={`Welcome back, ${session.user.name?.split(' ')[0] ?? 'there'}`}
         description={`Totals below are converted to your base currency (${currency}). Individual orders never mix currencies.`}

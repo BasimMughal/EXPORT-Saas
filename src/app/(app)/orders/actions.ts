@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import { Types } from 'mongoose';
 
 import { requireSession } from '@/lib/auth/session';
@@ -114,6 +114,7 @@ export async function createOrderAction(_: ActionState = initialState, formData:
     revalidatePath('/payments');
     redirect('/orders?created=1');
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to create order right now.'),
@@ -186,6 +187,7 @@ export async function updateOrderAction(
     revalidatePath('/payments');
     redirect('/orders?updated=1');
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to update order right now.'),

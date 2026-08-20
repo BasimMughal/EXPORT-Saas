@@ -11,7 +11,6 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEMO_ACCOUNT } from '@/lib/auth/demo';
 import { signInSchema, type SignInValues } from '@/lib/validations/auth';
 
 export function SignInForm() {
@@ -19,13 +18,17 @@ export function SignInForm() {
   const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
 
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
+  const requestedCallback = searchParams.get('callbackUrl');
+  const callbackUrl =
+    requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//')
+      ? requestedCallback
+      : '/dashboard';
 
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
-      email: DEMO_ACCOUNT.email,
-      password: DEMO_ACCOUNT.password,
+      email: '',
+      password: '',
     },
   });
 
@@ -36,7 +39,7 @@ export function SignInForm() {
       email: values.email,
       password: values.password,
       redirect: false,
-      callbackUrl,
+      redirectTo: callbackUrl,
     }).then((result) => {
       if (!result) {
         setFormError('Unable to sign in right now. Please try again.');
@@ -48,7 +51,7 @@ export function SignInForm() {
         return;
       }
 
-      router.push(result.url ?? callbackUrl);
+      router.replace(callbackUrl);
       router.refresh();
     });
   });
@@ -59,13 +62,6 @@ export function SignInForm() {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Welcome back</p>
         <h2 className="font-display text-3xl font-semibold tracking-tight">Sign in</h2>
         <p className="text-sm text-muted-foreground">Access your export operations workspace.</p>
-      </div>
-
-      <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
-        <p className="font-semibold text-primary">Demo account ready</p>
-        <p className="mt-1 font-mono text-xs text-muted-foreground">
-          {DEMO_ACCOUNT.email} / {DEMO_ACCOUNT.password}
-        </p>
       </div>
 
       <form className="space-y-4" onSubmit={onSubmit}>

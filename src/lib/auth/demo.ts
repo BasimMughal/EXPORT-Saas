@@ -11,7 +11,7 @@ export const DEMO_ACCOUNT = {
 };
 
 export function isDemoAuthEnabled() {
-  return process.env.DEMO_AUTH !== 'false';
+  return false;
 }
 
 export function matchDemoCredentials(email: string, password: string) {
@@ -34,6 +34,6 @@ export function matchDemoCredentials(email: string, password: string) {
   };
 }
 
-export function isDemoUserId(userId: string | undefined | null) {
-  return userId === DEMO_ACCOUNT.id;
+export function isDemoUserId(_userId: string | undefined | null) {
+  return false;
 }

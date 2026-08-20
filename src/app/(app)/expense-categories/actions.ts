@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import { Types } from 'mongoose';
 
 import { requireSession } from '@/lib/auth/session';
@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { expenseCategorySchema, type ExpenseCategoryValues } from '@/lib/validations/expense-category';
 import { ExpenseCategoryModel } from '@/models/expense-category.model';
+import { ExpenseModel } from '@/models/expense.model';
 
 type ActionState = {
   ok: boolean;
@@ -64,6 +65,7 @@ export async function createExpenseCategoryAction(
     revalidatePath('/expense-categories');
     redirect('/expense-categories?created=1');
   } catch (error) {
+    unstable_rethrow(error);
     const isDuplicate = (error as { code?: number }).code === 11000;
     if (isDuplicate) {
       return {
@@ -125,6 +127,7 @@ export async function updateExpenseCategoryAction(
     revalidatePath('/expense-categories');
     redirect('/expense-categories?updated=1');
   } catch (error) {
+    unstable_rethrow(error);
     const isDuplicate = (error as { code?: number }).code === 11000;
     if (isDuplicate) {
       return {
@@ -148,9 +151,20 @@ export async function deleteExpenseCategoryAction(categoryId: string, _formData:
 
   await connectMongoose();
 
+  const categoryObjectId = new Types.ObjectId(categoryId);
+  const userObjectId = new Types.ObjectId(session.user.id);
+  const hasExpenses = await ExpenseModel.exists({
+    categoryId: categoryObjectId,
+    userId: userObjectId,
+  });
+
+  if (hasExpenses) {
+    redirect('/expense-categories?error=in_use');
+  }
+
   const deleted = await ExpenseCategoryModel.findOneAndDelete({
-    _id: new Types.ObjectId(categoryId),
-    userId: new Types.ObjectId(session.user.id),
+    _id: categoryObjectId,
+    userId: userObjectId,
   });
 
   if (!deleted) {

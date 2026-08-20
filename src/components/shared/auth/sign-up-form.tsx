@@ -62,15 +62,15 @@ export function SignUpForm() {
       email: values.email,
       password: values.password,
       redirect: false,
-      callbackUrl: '/dashboard',
+      redirectTo: '/dashboard',
     });
 
-    if (signInResult?.error) {
+    if (!signInResult || signInResult.error) {
       router.push('/sign-in?registered=1');
       return;
     }
 
-    router.push(signInResult?.url ?? '/dashboard');
+    router.replace('/dashboard');
     router.refresh();
   });
 

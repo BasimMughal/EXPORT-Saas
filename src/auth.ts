@@ -4,7 +4,6 @@ import type { Types } from 'mongoose';
 
 import { env } from '@/env';
 import { ROLE_PERMISSIONS, type Role } from '@/lib/auth/authorization';
-import { matchDemoCredentials } from '@/lib/auth/demo';
 import { verifyPassword } from '@/lib/auth/password';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { signInSchema } from '@/lib/validations/auth';
@@ -46,11 +45,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = signInSchema.safeParse(credentials);
         if (!parsed.success) {
           return null;
-        }
-
-        const demoUser = matchDemoCredentials(parsed.data.email, parsed.data.password);
-        if (demoUser) {
-          return demoUser;
         }
 
         try {

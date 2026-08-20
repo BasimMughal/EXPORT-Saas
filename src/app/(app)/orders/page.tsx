@@ -27,6 +27,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { orderFiltersSchema } from '@/lib/validations/order';
 import { CustomerModel } from '@/models/customer.model';
 import { OrderModel } from '@/models/order.model';
+import { PaymentModel } from '@/models/payment.model';
 
 export const metadata: Metadata = {
   title: 'Orders',
@@ -219,25 +220,34 @@ export default async function OrdersPage({
 
   const preferred = await getPreferredCurrency(session.user.id);
 
-  const [matchedOrders, customerDocs] = await Promise.all([
-    OrderModel.find(query).select('status orderValue receivedAmount currency').lean(),
+  const [matchedOrders, customerDocs, paymentDocs] = await Promise.all([
+    OrderModel.find(query).select('_id status orderValue receivedAmount currency').lean(),
     CustomerModel.find({ userId: userObjectId }).select('name company').lean(),
+    PaymentModel.find({ userId: userObjectId }).select('orderId amount').lean(),
   ]) as unknown as [
     Array<{
+      _id: Types.ObjectId;
       status: OrderListItem['status'];
       orderValue?: number;
       receivedAmount?: number;
       currency?: CurrencyCode | string;
     }>,
     CustomerLite[],
+    Array<{ orderId: Types.ObjectId; amount: number }>,
   ];
+
+  const matchedOrderCurrencies = new Map(
+    matchedOrders.map((order) => [
+      String(order._id),
+      isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY,
+    ]),
+  );
 
   const stats = {
     totalOrders: matchedOrders.length,
-    totalReceivedAmount: matchedOrders.reduce((sum, order) => {
-      const currency = isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY;
-      const value = Number(order.orderValue ?? order.receivedAmount ?? 0);
-      return sum + convertCurrency(value, currency, preferred);
+    totalReceivedAmount: paymentDocs.reduce((sum, payment) => {
+      const currency = matchedOrderCurrencies.get(String(payment.orderId));
+      return currency ? sum + convertCurrency(Number(payment.amount ?? 0), currency, preferred) : sum;
     }, 0),
     pendingOrders: matchedOrders.filter((o) => o.status === 'pending').length,
     inProgressOrders: matchedOrders.filter((o) => o.status === 'in_progress').length,
