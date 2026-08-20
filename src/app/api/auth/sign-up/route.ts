@@ -58,6 +58,8 @@ export async function POST(request: Request) {
       role: 'viewer',
       status: 'active',
       organizationId: null,
+      preferredCurrency: 'PKR',
+      lastLoginAt: null,
     });
 
     return NextResponse.json(
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
           id: user._id.toString(),
           email: user.email,
           name: user.name,
+          signedUpAt: user.createdAt,
         },
       },
       { status: 201 },

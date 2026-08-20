@@ -47,7 +47,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        await connectMongoose();
+        try {
+          await connectMongoose();
+        } catch {
+          return null;
+        }
 
         const user = (await UserModel.findOne({
           email: parsed.data.email.toLowerCase(),

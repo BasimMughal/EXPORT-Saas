@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import { Types } from 'mongoose';
 
 import { requireSession } from '@/lib/auth/session';
@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { customerSchema, type CustomerValues } from '@/lib/validations/customer';
 import { CustomerModel } from '@/models/customer.model';
+import { OrderModel } from '@/models/order.model';
 
 type ActionState = {
   ok: boolean;
@@ -61,6 +62,7 @@ export async function createCustomerAction(_: ActionState = initialState, formDa
     revalidatePath('/customers');
     redirect('/customers?created=1');
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to create customer right now.'),
@@ -110,6 +112,7 @@ export async function updateCustomerAction(customerId: string, _: ActionState = 
     revalidatePath('/customers');
     redirect('/customers?updated=1');
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to update customer right now.'),
@@ -122,9 +125,23 @@ export async function deleteCustomerAction(customerId: string) {
     const session = await requireSession();
 
     await connectMongoose();
+    const customerObjectId = new Types.ObjectId(customerId);
+    const userObjectId = new Types.ObjectId(session.user.id);
+    const hasOrders = await OrderModel.exists({
+      customerId: customerObjectId,
+      userId: userObjectId,
+    });
+
+    if (hasOrders) {
+      return {
+        ok: false,
+        message: 'Delete or reassign this customer’s orders first.',
+      };
+    }
+
     const deleted = await CustomerModel.findOneAndDelete({
-      _id: new Types.ObjectId(customerId),
-      userId: new Types.ObjectId(session.user.id),
+      _id: customerObjectId,
+      userId: userObjectId,
     });
 
     if (!deleted) {
@@ -137,6 +154,7 @@ export async function deleteCustomerAction(customerId: string) {
     revalidatePath('/customers');
     redirect('/customers?deleted=1');
   } catch (error) {
+    unstable_rethrow(error);
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to delete customer right now.'),

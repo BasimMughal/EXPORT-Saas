@@ -1,5 +1,6 @@
 import { Schema, model, models, type InferSchemaType } from 'mongoose';
 
+import { CURRENCY_CODES, DEFAULT_CURRENCY } from '@/config/currency';
 import { ORDER_STATUSES } from '@/lib/validations/order';
 
 const OrderSchema = new Schema(
@@ -36,10 +37,23 @@ const OrderSchema = new Schema(
       required: true,
       min: 1,
     },
-    receivedAmount: {
+    orderValue: {
       type: Number,
       required: true,
       min: 0,
+    },
+    /** @deprecated Use payments module. Kept for migration reads only. */
+    receivedAmount: {
+      type: Number,
+      min: 0,
+      default: undefined,
+    },
+    currency: {
+      type: String,
+      enum: [...CURRENCY_CODES],
+      default: DEFAULT_CURRENCY,
+      required: true,
+      index: true,
     },
     orderDate: {
       type: Date,

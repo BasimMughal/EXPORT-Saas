@@ -53,7 +53,7 @@ export default async function EditExpenseCategoryPage({
         action={updateExpenseCategoryAction.bind(null, id)}
         description="Rename the category without affecting other users."
         initialValues={{
-          name: category.name,
+          name: String((category as { name?: string }).name ?? ''),
         }}
         submitLabel="Save Changes"
         title="Category Details"

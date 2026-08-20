@@ -1,5 +1,7 @@
-import { Types } from 'mongoose';
 import { z } from 'zod';
+import { Types } from 'mongoose';
+
+import { CURRENCY_CODES } from '@/config/currency';
 
 export const ORDER_STATUSES = ['pending', 'in_progress', 'completed', 'abandoned'] as const;
 
@@ -22,7 +24,8 @@ export const orderSchema = z.object({
   productName: z.string().trim().min(2, 'Product name must be at least 2 characters').max(150),
   description: z.string().trim().max(1000).optional().default(''),
   quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be at least 1'),
-  receivedAmount: z.coerce.number().min(0, 'Received amount cannot be negative'),
+  orderValue: z.coerce.number().min(0, 'Order value cannot be negative'),
+  currency: z.enum(CURRENCY_CODES).default('PKR'),
   orderDate: z.coerce.date(),
   deliveryDate: optionalDate,
   status: z.enum(ORDER_STATUSES).default('pending'),
@@ -33,8 +36,18 @@ export const orderFiltersSchema = z.object({
   q: z.string().trim().max(200).optional().default(''),
   status: z.enum(['', ...ORDER_STATUSES]).default(''),
   customerId: z.string().trim().optional().default(''),
+  currency: z.enum(['', ...CURRENCY_CODES]).default(''),
   sort: z
-    .enum(['orderNumber', 'productName', 'quantity', 'receivedAmount', 'orderDate', 'deliveryDate', 'status', 'createdAt'])
+    .enum([
+      'orderNumber',
+      'productName',
+      'quantity',
+      'orderValue',
+      'orderDate',
+      'deliveryDate',
+      'status',
+      'createdAt',
+    ])
     .default('createdAt'),
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),
