@@ -5,11 +5,13 @@ import { Types } from 'mongoose';
 
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { DemoModeBanner } from '@/components/shared/demo-mode-banner';
+import { DeleteOrderButton } from '@/components/shared/orders/delete-order-button';
 import { OrderFinancialSummary } from '@/components/shared/orders/order-financial-summary';
 import { OrderStatusBadge } from '@/components/shared/orders/order-status-badge';
 import { PageHeader } from '@/components/shared/page-header';
 import { PaymentTable } from '@/components/shared/payments/payment-table';
 import { Button } from '@/components/ui/button';
+import { deleteOrderAction } from '@/app/(app)/orders/actions';
 import { isDemoUserId } from '@/lib/auth/demo';
 import { requireSession } from '@/lib/auth/session';
 import { demoStore } from '@/lib/demo/store';
@@ -240,6 +242,9 @@ function OrderDetailView(props: {
             <Button asChild variant="outline" className="rounded-xl">
               <Link href={`/orders/${props.orderId}/edit`}>Edit order</Link>
             </Button>
+            <form action={deleteOrderAction.bind(null, props.orderId)}>
+              <DeleteOrderButton />
+            </form>
           </div>
         }
       />

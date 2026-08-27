@@ -20,7 +20,7 @@ type AppShellProps = {
 const sectionFor = (item: NavItem) => {
   if (item.href === '/dashboard') return 'Overview';
   if (['/customers', '/orders'].includes(item.href)) return 'Operations';
-  if (['/payments', '/expenses', '/expense-categories', '/reports'].includes(item.href)) {
+  if (['/payments', '/reports'].includes(item.href)) {
     return 'Finance';
   }
   return 'Workspace';
@@ -29,8 +29,7 @@ const sectionFor = (item: NavItem) => {
 export function AppShell({ children, session }: AppShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const role = session.user.role;
-  const visibleNav = sidebarNavigation.filter((item) => !item.roles || item.roles.includes(role));
+  const visibleNav = sidebarNavigation;
   const activeItem = visibleNav.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   );

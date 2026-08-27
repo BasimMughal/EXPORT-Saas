@@ -8,6 +8,7 @@ import { requireSession } from '@/lib/auth/session';
 import { getErrorMessage } from '@/lib/errors';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { generateOrderNumber } from '@/lib/orders/order-number';
+import { customerSchema, type CustomerValues } from '@/lib/validations/customer';
 import { orderSchema, type OrderValues } from '@/lib/validations/order';
 import { CustomerModel } from '@/models/customer.model';
 import { OrderModel } from '@/models/order.model';
@@ -23,6 +24,16 @@ type ActionState = {
 const initialState: ActionState = {
   ok: false,
   message: '',
+};
+
+type CustomerQuickCreateState = {
+  ok: boolean;
+  message: string;
+  fieldErrors?: Partial<Record<keyof CustomerValues, string>>;
+  customer?: {
+    id: string;
+    label: string;
+  };
 };
 
 function parseFormData(formData: FormData) {
@@ -51,6 +62,28 @@ function buildFieldErrors(errors: Record<string, string[] | undefined>) {
     orderDate: errors.orderDate?.[0],
     deliveryDate: errors.deliveryDate?.[0],
     status: errors.status?.[0],
+    notes: errors.notes?.[0],
+  };
+}
+
+function parseCustomerFormData(formData: FormData) {
+  return {
+    name: formData.get('name'),
+    company: formData.get('company'),
+    country: formData.get('country'),
+    phone: formData.get('phone'),
+    email: formData.get('email'),
+    notes: formData.get('notes'),
+  };
+}
+
+function buildCustomerFieldErrors(errors: Record<string, string[] | undefined>) {
+  return {
+    name: errors.name?.[0],
+    company: errors.company?.[0],
+    country: errors.country?.[0],
+    phone: errors.phone?.[0],
+    email: errors.email?.[0],
     notes: errors.notes?.[0],
   };
 }
@@ -118,6 +151,55 @@ export async function createOrderAction(_: ActionState = initialState, formData:
     return {
       ok: false,
       message: getErrorMessage(error, 'Unable to create order right now.'),
+    };
+  }
+}
+
+export async function createCustomerForOrderAction(
+  _: CustomerQuickCreateState,
+  formData: FormData,
+): Promise<CustomerQuickCreateState> {
+  try {
+    const session = await requireSession();
+    const parsed = customerSchema.safeParse(parseCustomerFormData(formData));
+
+    if (!parsed.success) {
+      return {
+        ok: false,
+        message: 'Please fix the highlighted customer fields.',
+        fieldErrors: buildCustomerFieldErrors(parsed.error.flatten().fieldErrors),
+      };
+    }
+
+    await connectMongoose();
+
+    const customer = await CustomerModel.create({
+      userId: new Types.ObjectId(session.user.id),
+      ...parsed.data,
+    });
+
+    const label = parsed.data.company
+      ? `${parsed.data.name} - ${parsed.data.company}`
+      : parsed.data.name;
+
+    revalidatePath('/customers');
+    revalidatePath('/orders');
+    revalidatePath('/orders/new');
+    revalidatePath('/dashboard');
+
+    return {
+      ok: true,
+      message: 'Customer created.',
+      customer: {
+        id: customer._id.toString(),
+        label,
+      },
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      ok: false,
+      message: getErrorMessage(error, 'Unable to create customer right now.'),
     };
   }
 }

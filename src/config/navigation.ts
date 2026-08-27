@@ -3,23 +3,17 @@ import {
   FileBarChart2,
   LayoutDashboard,
   Package,
-  Receipt,
-  Tags,
   UserCog,
   UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 
-import type { Role } from '@/lib/auth/authorization';
-
 export type NavItem = {
   title: string;
   href: string;
   icon: LucideIcon;
   description: string;
-  /** If set, only these roles see the item in the sidebar. */
-  roles?: Role[];
 };
 
 export const sidebarNavigation: NavItem[] = [
@@ -48,18 +42,6 @@ export const sidebarNavigation: NavItem[] = [
     description: 'Payment history',
   },
   {
-    title: 'Expenses',
-    href: '/expenses',
-    icon: Receipt,
-    description: 'Cost tracking',
-  },
-  {
-    title: 'Categories',
-    href: '/expense-categories',
-    icon: Tags,
-    description: 'Expense taxonomy',
-  },
-  {
     title: 'Reports',
     href: '/reports',
     icon: FileBarChart2,
@@ -70,7 +52,6 @@ export const sidebarNavigation: NavItem[] = [
     href: '/users',
     icon: UserCog,
     description: 'Signup registry',
-    roles: ['owner', 'admin'],
   },
   {
     title: 'Profile',

@@ -8,10 +8,24 @@ import { DEFAULT_CURRENCY, isCurrencyCode } from '@/config/currency';
 import { isDemoUserId } from '@/lib/auth/demo';
 import { getCurrentUserId } from '@/lib/auth/session';
 import { tryConnectMongoose } from '@/lib/db/mongoose';
+import {
+  expenseCategorySchema,
+  type ExpenseCategoryValues,
+} from '@/lib/validations/expense-category';
 import { expenseSchema } from '@/lib/validations/expense';
 import { ExpenseModel } from '@/models/expense.model';
 import { ExpenseCategoryModel } from '@/models/expense-category.model';
 import { OrderModel } from '@/models/order.model';
+
+type CategoryQuickCreateState = {
+  ok: boolean;
+  message: string;
+  fieldErrors?: Partial<Record<keyof ExpenseCategoryValues, string>>;
+  category?: {
+    id: string;
+    label: string;
+  };
+};
 
 async function ensureWritable(userId: string) {
   if (isDemoUserId(userId)) {
@@ -36,6 +50,76 @@ function revalidateExpensePaths(orderId?: string | null) {
     revalidatePath(`/orders/${orderId}`);
     revalidatePath(`/orders/${orderId}/statement`);
   }
+}
+
+function normalizeCategoryName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getSafeReturnTo(value: FormDataEntryValue | null) {
+  if (typeof value !== 'string') return '';
+  return value.startsWith('/') && !value.startsWith('//') ? value : '';
+}
+
+export async function createExpenseCategoryForExpenseAction(
+  _: CategoryQuickCreateState,
+  formData: FormData,
+): Promise<CategoryQuickCreateState> {
+  const userId = await getCurrentUserId();
+  const writable = await ensureWritable(userId);
+  if (!writable.ok) {
+    return { ok: false, message: writable.message };
+  }
+
+  const parsed = expenseCategorySchema.safeParse({
+    name: formData.get('name'),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: 'Please fix the highlighted category field.',
+      fieldErrors: {
+        name: parsed.error.flatten().fieldErrors.name?.[0],
+      },
+    };
+  }
+
+  const userObjectId = new Types.ObjectId(userId);
+  const nameNormalized = normalizeCategoryName(parsed.data.name);
+  const existing = (await ExpenseCategoryModel.findOne({
+    userId: userObjectId,
+    nameNormalized,
+  }).lean()) as { _id: Types.ObjectId; name: string } | null;
+
+  if (existing) {
+    return {
+      ok: true,
+      message: 'Category selected.',
+      category: {
+        id: String(existing._id),
+        label: existing.name as string,
+      },
+    };
+  }
+
+  const category = await ExpenseCategoryModel.create({
+    userId: userObjectId,
+    name: parsed.data.name,
+    nameNormalized,
+  });
+
+  revalidatePath('/expense-categories');
+  revalidatePath('/expenses');
+
+  return {
+    ok: true,
+    message: 'Category created.',
+    category: {
+      id: category._id.toString(),
+      label: category.name,
+    },
+  };
 }
 
 export async function createExpenseAction(formData: FormData) {
@@ -95,7 +179,10 @@ export async function createExpenseAction(formData: FormData) {
   });
 
   revalidateExpensePaths(orderId ? String(orderId) : null);
-  redirect(orderId ? `/orders/${String(orderId)}?expense=created` : '/expenses?created=1');
+  const returnTo = getSafeReturnTo(formData.get('returnTo'));
+  redirect(
+    returnTo || (orderId ? `/orders/${String(orderId)}?expense=created` : '/expenses?created=1'),
+  );
 }
 
 export async function updateExpenseAction(expenseId: string, formData: FormData) {

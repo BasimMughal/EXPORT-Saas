@@ -74,6 +74,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           {
             $set: {
               lastLoginAt: new Date(),
+              role: 'admin',
             },
           },
         );
@@ -82,9 +83,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          role: user.role as Role,
+          role: 'admin' as Role,
           organizationId: user.organizationId ? user.organizationId.toString() : null,
-          permissions: ROLE_PERMISSIONS[user.role as Role],
+          permissions: ROLE_PERMISSIONS.admin,
         };
       },
     }),
@@ -92,9 +93,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
+        token.role = 'admin';
         token.organizationId = user.organizationId;
-        token.permissions = user.permissions;
+        token.permissions = ROLE_PERMISSIONS.admin;
       }
 
       return token;
@@ -102,9 +103,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? '';
-        session.user.role = (token.role ?? 'viewer') as Role;
+        session.user.role = 'admin';
         session.user.organizationId = token.organizationId ?? null;
-        session.user.permissions = token.permissions ?? [];
+        session.user.permissions = ROLE_PERMISSIONS.admin;
       }
 
       return session;

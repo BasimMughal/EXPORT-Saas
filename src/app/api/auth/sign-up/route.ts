@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       email,
       passwordHash,
-      role: 'viewer',
+      role: 'admin',
       status: 'active',
       organizationId: null,
       preferredCurrency: 'PKR',

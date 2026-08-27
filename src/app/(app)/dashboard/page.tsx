@@ -294,6 +294,7 @@ export default async function DashboardPage() {
                         {formatDateDisplay(order.orderDate)}
                       </p>
                     </div>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                   </Link>
                 ))}
               </div>

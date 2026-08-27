@@ -8,9 +8,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { requireSession } from '@/lib/auth/session';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { CustomerModel } from '@/models/customer.model';
+import { Types } from 'mongoose';
 
 type CustomerLite = {
-  _id: string;
+  _id: Types.ObjectId;
   name: string;
   company?: string | null;
 };
@@ -34,7 +35,8 @@ export default async function NewOrderPage() {
         <CardContent className="space-y-4 p-8 text-center">
           <h1 className="text-2xl font-semibold">Create a customer first</h1>
           <p className="text-sm text-muted-foreground">
-            Orders belong to one customer, so you need at least one customer before creating an order.
+            Orders belong to one customer, so you need at least one customer before creating an
+            order.
           </p>
           <Button asChild>
             <Link href="/customers/new">Create Customer</Link>
@@ -45,7 +47,7 @@ export default async function NewOrderPage() {
   }
 
   const customerOptions = customers.map((customer) => ({
-    id: customer._id,
+    id: customer._id.toString(),
     label: customer.company ? `${customer.name} - ${customer.company}` : customer.name,
   }));
 
@@ -54,7 +56,9 @@ export default async function NewOrderPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Create Order</h1>
-          <p className="text-sm text-muted-foreground">Add a new order and keep every field validated on the server.</p>
+          <p className="text-sm text-muted-foreground">
+            Add a new order and keep every field validated on the server.
+          </p>
         </div>
         <Button asChild variant="outline">
           <Link href="/orders">Back</Link>
