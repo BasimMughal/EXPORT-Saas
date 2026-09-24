@@ -37,8 +37,14 @@ export default async function RootLayout({
   const session = await auth();
 
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} light`} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+    <html
+      lang="en"
+      className={`${sans.variable} ${display.variable} light`}
+      suppressHydrationWarning
+    >
+      {/* Browser extensions (e.g. ColorZilla's cz-shortcut-listen) add attributes to <body>
+          before React hydrates; this only silences that one element, not its children. */}
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <Providers session={session}>{children}</Providers>
       </body>
     </html>

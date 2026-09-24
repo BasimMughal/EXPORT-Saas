@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
@@ -18,6 +19,8 @@ export function SignInForm() {
   const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Arrived here straight after creating an account.
+  const justRegistered = searchParams.get('registered') === '1';
   const requestedCallback = searchParams.get('callbackUrl');
   const callbackUrl =
     requestedCallback?.startsWith('/') && !requestedCallback.startsWith('//')
@@ -64,12 +67,28 @@ export function SignInForm() {
         <p className="text-sm text-muted-foreground">Access your export operations workspace.</p>
       </div>
 
+      {justRegistered ? (
+        <div
+          role="status"
+          className="mb-5 flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-medium text-emerald-800">Account created</p>
+            <p className="text-emerald-700">
+              Sign in with the email and password you just set up.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
+            autoFocus={justRegistered}
             autoComplete="email"
             placeholder="you@company.com"
             className="h-11 rounded-xl bg-white"

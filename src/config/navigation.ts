@@ -3,8 +3,6 @@ import {
   FileBarChart2,
   LayoutDashboard,
   Package,
-  UserCog,
-  UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -15,6 +13,15 @@ export type NavItem = {
   icon: LucideIcon;
   description: string;
 };
+
+/** Pages reached from the header rather than the sidebar; used for the header title. */
+export const headerOnlyPages: Array<Pick<NavItem, 'title' | 'href' | 'description'>> = [
+  {
+    title: 'Profile',
+    href: '/profile',
+    description: 'Account settings',
+  },
+];
 
 export const sidebarNavigation: NavItem[] = [
   {
@@ -46,17 +53,5 @@ export const sidebarNavigation: NavItem[] = [
     href: '/reports',
     icon: FileBarChart2,
     description: 'Export & insights',
-  },
-  {
-    title: 'Users',
-    href: '/users',
-    icon: UserCog,
-    description: 'Signup registry',
-  },
-  {
-    title: 'Profile',
-    href: '/profile',
-    icon: UserRound,
-    description: 'Account settings',
   },
 ];

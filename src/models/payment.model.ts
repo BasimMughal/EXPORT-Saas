@@ -1,5 +1,6 @@
 import { Schema, model, models, type InferSchemaType } from 'mongoose';
 
+import { CURRENCY_CODES } from '@/config/currency';
 import { PAYMENT_METHODS } from '@/lib/validations/payment';
 
 const PaymentSchema = new Schema(
@@ -20,6 +21,26 @@ const PaymentSchema = new Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+    /**
+     * Set when the amount was entered in another currency and converted into the order
+     * currency: what was actually paid, and the rate used (units of originalCurrency per
+     * 1 unit of the order currency). `amount` is always the converted, order-currency value.
+     */
+    originalAmount: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    originalCurrency: {
+      type: String,
+      enum: [...CURRENCY_CODES, null],
+      default: null,
+    },
+    exchangeRate: {
+      type: Number,
+      min: 0,
+      default: null,
     },
     paymentDate: {
       type: Date,

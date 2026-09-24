@@ -1,18 +1,11 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 
-import { createCustomerForOrderAction } from '@/app/(app)/orders/actions';
 import { CurrencySelect } from '@/components/shared/currency-select';
+import { OrderNumberChip } from '@/components/shared/orders/order-number-chip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,6 +19,7 @@ type ActionState = {
   ok: boolean;
   message: string;
   fieldErrors?: Partial<Record<keyof OrderValues, string>>;
+  customerFieldErrors?: Partial<Record<keyof CustomerValues, string>>;
 };
 
 type CustomerOption = {
@@ -37,7 +31,6 @@ type OrderFormValues = {
   orderNumber?: string;
   customerId?: string;
   productName?: string;
-  description?: string;
   quantity?: string;
   orderValue?: string;
   currency?: CurrencyCode | string;
@@ -54,21 +47,11 @@ type OrderFormProps = {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   customers: CustomerOption[];
   initialValues?: OrderFormValues;
+  /** Rendered in the card header's top-right corner. */
+  headerAction?: ReactNode;
 };
 
 const initialState: ActionState = {
-  ok: false,
-  message: '',
-};
-
-type CustomerCreateState = {
-  ok: boolean;
-  message: string;
-  fieldErrors?: Partial<Record<keyof CustomerValues, string>>;
-  customer?: CustomerOption;
-};
-
-const initialCustomerState: CustomerCreateState = {
   ok: false,
   message: '',
 };
@@ -85,16 +68,6 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-function CustomerSubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button className="h-9 w-full rounded-lg sm:w-auto" type="submit" disabled={pending}>
-      {pending ? 'Creating...' : 'Create customer'}
-    </Button>
-  );
-}
-
 export function OrderForm({
   title,
   description,
@@ -102,170 +75,163 @@ export function OrderForm({
   action,
   customers,
   initialValues,
+  headerAction,
 }: OrderFormProps) {
   const [state, formAction] = useActionState(action, initialState);
-  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>(customers);
-  const [selectedCustomerId, setSelectedCustomerId] = useState(initialValues?.customerId ?? '');
-  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
-  const [customerState, customerFormAction] = useActionState(
-    createCustomerForOrderAction,
-    initialCustomerState,
+  // With no saved customers yet, start straight in "new customer" mode.
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    initialValues?.customerId ?? (customers.length ? '' : newCustomerValue),
   );
-  const customerFormRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    setCustomerOptions(customers);
-  }, [customers]);
-
-  useEffect(() => {
-    if (!customerState.ok || !customerState.customer) return;
-
-    const newCustomer = customerState.customer;
-    setCustomerOptions((current) => {
-      const alreadyExists = current.some((customer) => customer.id === newCustomer.id);
-      return alreadyExists ? current : [...current, newCustomer];
-    });
-    setSelectedCustomerId(newCustomer.id);
-    setCustomerDialogOpen(false);
-    customerFormRef.current?.reset();
-  }, [customerState]);
-
-  function handleCustomerChange(value: string) {
-    if (value === newCustomerValue) {
-      setCustomerDialogOpen(true);
-      return;
-    }
-
-    setSelectedCustomerId(value);
-  }
+  const isNewCustomer = selectedCustomerId === newCustomerValue;
+  // Editing: customer and order ID are shown as chips, and status is changed from the order
+  // page's Actions menu, so those fields are only on the create form.
+  const isEditing = Boolean(initialValues?.orderNumber);
+  // On the edit screen, the order and its customer are shown as chips beside the title.
+  const selectedCustomerLabel = customers.find(
+    (customer) => customer.id === selectedCustomerId,
+  )?.label;
 
   return (
-    <>
-      <Card className="border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-5" action={formAction}>
-            {initialValues?.orderNumber ? (
-              <div className="space-y-2">
-                <Label htmlFor="orderNumber">Order Number</Label>
-                <Input id="orderNumber" value={initialValues.orderNumber} readOnly />
-              </div>
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>{title}</CardTitle>
+            {initialValues?.orderNumber && selectedCustomerLabel ? (
+              <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+                {selectedCustomerLabel}
+              </span>
             ) : null}
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
+            {initialValues?.orderNumber ? (
+              <OrderNumberChip orderNumber={initialValues.orderNumber} />
+            ) : null}
+          </div>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-5" action={formAction}>
+          <div className="grid gap-5 md:grid-cols-3">
+            {isEditing ? (
+              <>
+                <input type="hidden" name="customerId" value={selectedCustomerId} />
+                <input type="hidden" name="customerMode" value="existing" />
+              </>
+            ) : (
+              <div className="space-y-2 md:col-span-3">
                 <Label htmlFor="customerId">Customer</Label>
                 <select
                   id="customerId"
                   name="customerId"
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={selectedCustomerId}
-                  onChange={(event) => handleCustomerChange(event.target.value)}
+                  onChange={(event) => setSelectedCustomerId(event.target.value)}
                 >
                   <option value="">Select a customer</option>
                   <option value={newCustomerValue}>+ New customer</option>
-                  {customerOptions.map((customer) => (
+                  {customers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
                       {customer.label}
                     </option>
                   ))}
                 </select>
+                <input
+                  type="hidden"
+                  name="customerMode"
+                  value={isNewCustomer ? 'new' : 'existing'}
+                />
                 {state.fieldErrors?.customerId ? (
                   <p className="text-sm text-destructive">{state.fieldErrors.customerId}</p>
                 ) : null}
               </div>
+            )}
 
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="productName">Product Name</Label>
-                <Input
-                  id="productName"
-                  name="productName"
-                  defaultValue={initialValues?.productName ?? ''}
-                />
-                {state.fieldErrors?.productName ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.productName}</p>
-                ) : null}
-              </div>
+            {isNewCustomer ? <NewCustomerFields errors={state.customerFieldErrors} /> : null}
 
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  defaultValue={initialValues?.quantity ?? '1'}
-                />
-                {state.fieldErrors?.quantity ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.quantity}</p>
-                ) : null}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="productName">Product Name</Label>
+              <Input
+                id="productName"
+                name="productName"
+                defaultValue={initialValues?.productName ?? ''}
+              />
+              {state.fieldErrors?.productName ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.productName}</p>
+              ) : null}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="orderValue">Order Value</Label>
-                <Input
-                  id="orderValue"
-                  name="orderValue"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={initialValues?.orderValue ?? '0'}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Total contract amount. Payments are recorded separately.
-                </p>
-                {state.fieldErrors?.orderValue ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.orderValue}</p>
-                ) : null}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantity</Label>
+              <Input
+                id="quantity"
+                name="quantity"
+                type="number"
+                min="1"
+                defaultValue={initialValues?.quantity ?? '1'}
+              />
+              {state.fieldErrors?.quantity ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.quantity}</p>
+              ) : null}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="currency">Currency</Label>
-                <CurrencySelect
-                  id="currency"
-                  name="currency"
-                  defaultValue={(initialValues?.currency as CurrencyCode) ?? 'PKR'}
-                  className="h-10 rounded-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  All payments and order expenses stay in this currency. No conversion inside the
-                  order.
-                </p>
-                {state.fieldErrors?.currency ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.currency}</p>
-                ) : null}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="orderValue">Order Value</Label>
+              <Input
+                id="orderValue"
+                name="orderValue"
+                type="number"
+                step="0.01"
+                min="0"
+                defaultValue={initialValues?.orderValue ?? '0'}
+              />
+              {state.fieldErrors?.orderValue ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.orderValue}</p>
+              ) : null}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="orderDate">Order Date</Label>
-                <Input
-                  id="orderDate"
-                  name="orderDate"
-                  type="date"
-                  defaultValue={initialValues?.orderDate ?? formatDateInput(new Date())}
-                />
-                {state.fieldErrors?.orderDate ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.orderDate}</p>
-                ) : null}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency</Label>
+              <CurrencySelect
+                id="currency"
+                name="currency"
+                defaultValue={(initialValues?.currency as CurrencyCode) ?? 'PKR'}
+                className="h-10 rounded-md"
+              />
+              {state.fieldErrors?.currency ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.currency}</p>
+              ) : null}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="deliveryDate">Delivery Date</Label>
-                <Input
-                  id="deliveryDate"
-                  name="deliveryDate"
-                  type="date"
-                  defaultValue={initialValues?.deliveryDate ?? ''}
-                />
-                {state.fieldErrors?.deliveryDate ? (
-                  <p className="text-sm text-destructive">{state.fieldErrors.deliveryDate}</p>
-                ) : null}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="orderDate">Order Date</Label>
+              <Input
+                id="orderDate"
+                name="orderDate"
+                type="date"
+                required
+                defaultValue={initialValues?.orderDate ?? formatDateInput(new Date())}
+              />
+              {state.fieldErrors?.orderDate ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.orderDate}</p>
+              ) : null}
+            </div>
 
-              <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
+              <Label htmlFor="deliveryDate">Delivery Date</Label>
+              <Input
+                id="deliveryDate"
+                name="deliveryDate"
+                type="date"
+                defaultValue={initialValues?.deliveryDate ?? ''}
+              />
+              {state.fieldErrors?.deliveryDate ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.deliveryDate}</p>
+              ) : null}
+            </div>
+
+            {isEditing ? null : (
+              <div className="space-y-2 md:col-span-3">
                 <Label htmlFor="status">Status</Label>
                 <select
                   id="status"
@@ -285,143 +251,61 @@ export function OrderForm({
                   <p className="text-sm text-destructive">{state.fieldErrors.status}</p>
                 ) : null}
               </div>
-            </div>
+            )}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                name="description"
-                defaultValue={initialValues?.description ?? ''}
-              />
-              {state.fieldErrors?.description ? (
-                <p className="text-sm text-destructive">{state.fieldErrors.description}</p>
-              ) : null}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea id="notes" name="notes" defaultValue={initialValues?.notes ?? ''} />
+            {state.fieldErrors?.notes ? (
+              <p className="text-sm text-destructive">{state.fieldErrors.notes}</p>
+            ) : null}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" defaultValue={initialValues?.notes ?? ''} />
-              {state.fieldErrors?.notes ? (
-                <p className="text-sm text-destructive">{state.fieldErrors.notes}</p>
-              ) : null}
-            </div>
+          {state.message ? <p className="text-sm text-destructive">{state.message}</p> : null}
 
-            {state.message ? <p className="text-sm text-destructive">{state.message}</p> : null}
+          <SubmitButton label={submitLabel} />
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
-            <SubmitButton label={submitLabel} />
-          </form>
-        </CardContent>
-      </Card>
+const newCustomerFields: Array<{
+  name: string;
+  field: keyof CustomerValues;
+  label: string;
+  type?: string;
+  required?: boolean;
+}> = [
+  { name: 'customerName', field: 'name', label: 'Customer name', required: true },
+  { name: 'customerCountry', field: 'country', label: 'Country', required: true },
+  { name: 'customerCompany', field: 'company', label: 'Company' },
+  { name: 'customerPhone', field: 'phone', label: 'Phone' },
+  { name: 'customerEmail', field: 'email', label: 'Email', type: 'email' },
+];
 
-      <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] gap-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-950 shadow-2xl sm:max-w-[560px]">
-          <DialogHeader className="border-b border-slate-200 px-5 py-4">
-            <DialogTitle className="text-base">New customer</DialogTitle>
-            <DialogDescription className="text-xs">
-              Add customer details, then continue this order.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form ref={customerFormRef} action={customerFormAction}>
-            <div className="max-h-[60vh] space-y-4 overflow-y-auto px-5 py-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs" htmlFor="quick-customer-name">
-                    Name
-                  </Label>
-                  <Input
-                    id="quick-customer-name"
-                    name="name"
-                    className="h-9 rounded-lg"
-                    autoFocus
-                  />
-                  {customerState.fieldErrors?.name ? (
-                    <p className="text-xs text-destructive">{customerState.fieldErrors.name}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs" htmlFor="quick-customer-company">
-                    Company
-                  </Label>
-                  <Input id="quick-customer-company" name="company" className="h-9 rounded-lg" />
-                  {customerState.fieldErrors?.company ? (
-                    <p className="text-xs text-destructive">{customerState.fieldErrors.company}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs" htmlFor="quick-customer-country">
-                    Country
-                  </Label>
-                  <Input id="quick-customer-country" name="country" className="h-9 rounded-lg" />
-                  {customerState.fieldErrors?.country ? (
-                    <p className="text-xs text-destructive">{customerState.fieldErrors.country}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs" htmlFor="quick-customer-phone">
-                    Phone
-                  </Label>
-                  <Input id="quick-customer-phone" name="phone" className="h-9 rounded-lg" />
-                  {customerState.fieldErrors?.phone ? (
-                    <p className="text-xs text-destructive">{customerState.fieldErrors.phone}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs" htmlFor="quick-customer-email">
-                    Email
-                  </Label>
-                  <Input
-                    id="quick-customer-email"
-                    name="email"
-                    type="email"
-                    className="h-9 rounded-lg"
-                  />
-                  {customerState.fieldErrors?.email ? (
-                    <p className="text-xs text-destructive">{customerState.fieldErrors.email}</p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="quick-customer-notes">
-                  Notes
-                </Label>
-                <Textarea
-                  id="quick-customer-notes"
-                  name="notes"
-                  className="min-h-20 rounded-lg"
-                />
-                {customerState.fieldErrors?.notes ? (
-                  <p className="text-xs text-destructive">{customerState.fieldErrors.notes}</p>
-                ) : null}
-              </div>
-
-              {!customerState.ok && customerState.message ? (
-                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {customerState.message}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 rounded-lg bg-white"
-                onClick={() => setCustomerDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <CustomerSubmitButton />
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+function NewCustomerFields({ errors }: { errors?: Partial<Record<keyof CustomerValues, string>> }) {
+  return (
+    <div className="space-y-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 md:col-span-3">
+      <div>
+        <p className="text-sm font-medium">New customer details</p>
+        <p className="text-xs text-muted-foreground">
+          This customer is saved together with the order and will appear in Customers.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {newCustomerFields.map(({ name, field, label, type, required }) => (
+          <div key={name} className="space-y-1.5">
+            <Label htmlFor={name}>
+              {label}
+              {required ? <span className="text-destructive"> *</span> : null}
+            </Label>
+            <Input id={name} name={name} type={type ?? 'text'} required={required} />
+            {errors?.[field] ? <p className="text-sm text-destructive">{errors[field]}</p> : null}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

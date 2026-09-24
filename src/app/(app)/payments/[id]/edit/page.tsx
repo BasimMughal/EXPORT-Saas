@@ -78,14 +78,20 @@ export default async function EditPaymentPage({
     method: string;
     referenceNumber?: string;
     notes?: string;
+    originalAmount?: number | null;
+    originalCurrency?: string | null;
+    exchangeRate?: number | null;
   } | null;
   if (!payment) notFound();
 
   const orders = (
-    await OrderModel.find({ userId: userObjectId }).select('orderNumber productName').lean()
+    await OrderModel.find({ userId: userObjectId })
+      .select('orderNumber productName currency')
+      .lean()
   ).map((o) => ({
     id: String(o._id),
     label: `${o.orderNumber} — ${o.productName}`,
+    currency: o.currency as string | undefined,
   }));
 
   return (
@@ -116,6 +122,9 @@ export default async function EditPaymentPage({
           method: String(payment.method),
           referenceNumber: (payment.referenceNumber as string) ?? '',
           notes: (payment.notes as string) ?? '',
+          originalAmount: payment.originalAmount ?? null,
+          originalCurrency: payment.originalCurrency ?? null,
+          exchangeRate: payment.exchangeRate ?? null,
         }}
         submitLabel="Save changes"
       />

@@ -9,6 +9,8 @@ import { assertResourceOwnership } from '@/lib/auth/ownership';
 import { getCurrentUserId } from '@/lib/auth/session';
 import { demoStore } from '@/lib/demo/store';
 import { tryConnectMongoose } from '@/lib/db/mongoose';
+import { DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '@/config/currency';
+import { convertToOrderCurrency } from '@/lib/finance/currency-conversion';
 import { paymentSchema } from '@/lib/validations/payment';
 import { OrderModel } from '@/models/order.model';
 import { PaymentModel } from '@/models/payment.model';
@@ -42,12 +44,42 @@ async function verifyOrderOwnership(orderId: string, userId: string) {
     return detail?.order ?? null;
   }
 
-  const order = await OrderModel.findOne({
+  const order = (await OrderModel.findOne({
     _id: new Types.ObjectId(orderId),
     userId: new Types.ObjectId(userId),
-  }).lean();
+  }).lean()) as { currency?: string } | null;
 
   return order;
+}
+
+/**
+ * Payments are always stored in their order's currency. One received in another currency is
+ * converted at the rate the user entered; the original amount and rate are kept alongside.
+ */
+function toOrderCurrency(
+  data: { amount: number; currency?: CurrencyCode; exchangeRate?: number },
+  order: { currency?: unknown },
+) {
+  const orderCurrency = isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY;
+  return convertToOrderCurrency({
+    amount: data.amount,
+    enteredCurrency: data.currency ?? orderCurrency,
+    orderCurrency,
+    quotedRate: data.exchangeRate,
+  });
+}
+
+function readPaymentForm(formData: FormData) {
+  return {
+    orderId: formData.get('orderId'),
+    amount: formData.get('amount'),
+    currency: formData.get('currency') || undefined,
+    exchangeRate: formData.get('exchangeRate'),
+    paymentDate: formData.get('paymentDate'),
+    method: formData.get('method'),
+    referenceNumber: formData.get('referenceNumber') || '',
+    notes: formData.get('notes') || '',
+  };
 }
 
 export async function createPaymentAction(formData: FormData) {
@@ -57,14 +89,7 @@ export async function createPaymentAction(formData: FormData) {
     return { error: writable.message };
   }
 
-  const parsed = paymentSchema.safeParse({
-    orderId: formData.get('orderId'),
-    amount: formData.get('amount'),
-    paymentDate: formData.get('paymentDate'),
-    method: formData.get('method'),
-    referenceNumber: formData.get('referenceNumber') || '',
-    notes: formData.get('notes') || '',
-  });
+  const parsed = paymentSchema.safeParse(readPaymentForm(formData));
 
   if (!parsed.success) {
     return { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors };
@@ -75,10 +100,15 @@ export async function createPaymentAction(formData: FormData) {
     return { error: 'Selected order was not found.' };
   }
 
+  const conversion = toOrderCurrency(parsed.data, order);
+  if (!conversion.ok) {
+    return { error: conversion.error };
+  }
+
   if (writable.demo || isDemoUserId(userId)) {
     demoStore.createPayment({
       orderId: parsed.data.orderId,
-      amount: parsed.data.amount,
+      amount: conversion.value.amount,
       paymentDate: new Date(parsed.data.paymentDate).toISOString(),
       method: parsed.data.method,
       referenceNumber: parsed.data.referenceNumber ?? '',
@@ -91,7 +121,7 @@ export async function createPaymentAction(formData: FormData) {
   await PaymentModel.create({
     userId: new Types.ObjectId(userId),
     orderId: new Types.ObjectId(parsed.data.orderId),
-    amount: parsed.data.amount,
+    ...conversion.value,
     paymentDate: parsed.data.paymentDate,
     method: parsed.data.method,
     referenceNumber: parsed.data.referenceNumber ?? '',
@@ -109,14 +139,7 @@ export async function updatePaymentAction(paymentId: string, formData: FormData)
     return { error: writable.message };
   }
 
-  const parsed = paymentSchema.safeParse({
-    orderId: formData.get('orderId'),
-    amount: formData.get('amount'),
-    paymentDate: formData.get('paymentDate'),
-    method: formData.get('method'),
-    referenceNumber: formData.get('referenceNumber') || '',
-    notes: formData.get('notes') || '',
-  });
+  const parsed = paymentSchema.safeParse(readPaymentForm(formData));
 
   if (!parsed.success) {
     return { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors };
@@ -127,6 +150,11 @@ export async function updatePaymentAction(paymentId: string, formData: FormData)
     return { error: 'Selected order was not found.' };
   }
 
+  const conversion = toOrderCurrency(parsed.data, order);
+  if (!conversion.ok) {
+    return { error: conversion.error };
+  }
+
   if (isDemoUserId(userId)) {
     const existing = demoStore.getPayment(paymentId);
     if (!existing || existing.userId !== userId) {
@@ -135,7 +163,7 @@ export async function updatePaymentAction(paymentId: string, formData: FormData)
     assertResourceOwnership(existing.userId, userId);
     demoStore.updatePayment(paymentId, {
       orderId: parsed.data.orderId,
-      amount: parsed.data.amount,
+      amount: conversion.value.amount,
       paymentDate: new Date(parsed.data.paymentDate).toISOString(),
       method: parsed.data.method,
       referenceNumber: parsed.data.referenceNumber ?? '',
@@ -153,7 +181,7 @@ export async function updatePaymentAction(paymentId: string, formData: FormData)
     {
       $set: {
         orderId: new Types.ObjectId(parsed.data.orderId),
-        amount: parsed.data.amount,
+        ...conversion.value,
         paymentDate: parsed.data.paymentDate,
         method: parsed.data.method,
         referenceNumber: parsed.data.referenceNumber ?? '',
@@ -210,4 +238,96 @@ export async function deletePaymentAction(paymentId: string, formData?: FormData
   const orderId = String(existing.orderId);
   revalidatePaymentPaths(orderId);
   redirect(returnOrderId ? `/orders/${returnOrderId}?payment=deleted` : '/payments?deleted=1');
+}
+
+export type OrderPaymentActionResult = {
+  ok: boolean;
+  message: string;
+};
+
+/** Deletes a payment from an order screen and returns a result instead of redirecting. */
+export async function deleteOrderPaymentAction(
+  orderId: string,
+  paymentId: string,
+): Promise<OrderPaymentActionResult> {
+  const userId = await getCurrentUserId();
+  const writable = await ensureWritable(userId);
+  if (!writable.ok) {
+    return { ok: false, message: writable.message };
+  }
+
+  if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(paymentId)) {
+    return { ok: false, message: 'Payment not found.' };
+  }
+
+  const deleted = await PaymentModel.findOneAndDelete({
+    _id: new Types.ObjectId(paymentId),
+    orderId: new Types.ObjectId(orderId),
+    userId: new Types.ObjectId(userId),
+  });
+  if (!deleted) {
+    return { ok: false, message: 'Payment not found.' };
+  }
+
+  revalidatePaymentPaths(orderId);
+  return { ok: true, message: 'Payment deleted.' };
+}
+
+/** Records a payment from an order screen and returns a result instead of redirecting. */
+export async function saveOrderPaymentAction(
+  orderId: string,
+  formData: FormData,
+): Promise<OrderPaymentActionResult> {
+  const userId = await getCurrentUserId();
+  const writable = await ensureWritable(userId);
+  if (!writable.ok) {
+    return { ok: false, message: writable.message };
+  }
+
+  // Payments added from an order screen always belong to that order.
+  formData.set('orderId', orderId);
+  const parsed = paymentSchema.safeParse(readPaymentForm(formData));
+  if (!parsed.success) {
+    const firstFieldError = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+    return { ok: false, message: firstFieldError ?? 'Please check the payment details.' };
+  }
+
+  const order =
+    writable.demo || Types.ObjectId.isValid(orderId)
+      ? await verifyOrderOwnership(orderId, userId)
+      : null;
+  if (!order) {
+    return { ok: false, message: 'Order not found.' };
+  }
+
+  const conversion = toOrderCurrency(parsed.data, order);
+  if (!conversion.ok) {
+    return { ok: false, message: conversion.error };
+  }
+
+  const payment = {
+    amount: conversion.value.amount,
+    method: parsed.data.method,
+    referenceNumber: parsed.data.referenceNumber ?? '',
+    notes: parsed.data.notes ?? '',
+  };
+
+  if (writable.demo) {
+    demoStore.createPayment({
+      orderId,
+      paymentDate: new Date(parsed.data.paymentDate).toISOString(),
+      ...payment,
+    });
+  } else {
+    await PaymentModel.create({
+      userId: new Types.ObjectId(userId),
+      orderId: new Types.ObjectId(orderId),
+      paymentDate: parsed.data.paymentDate,
+      ...payment,
+      ...conversion.value,
+    });
+  }
+
+  revalidatePaymentPaths(orderId);
+  return { ok: true, message: 'Payment recorded.' };
 }

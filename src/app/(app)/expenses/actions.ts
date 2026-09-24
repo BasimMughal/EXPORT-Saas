@@ -12,6 +12,10 @@ import {
   expenseCategorySchema,
   type ExpenseCategoryValues,
 } from '@/lib/validations/expense-category';
+import {
+  convertToOrderCurrency,
+  type AmountInOrderCurrency,
+} from '@/lib/finance/currency-conversion';
 import { expenseSchema } from '@/lib/validations/expense';
 import { ExpenseModel } from '@/models/expense.model';
 import { ExpenseCategoryModel } from '@/models/expense-category.model';
@@ -48,6 +52,7 @@ function revalidateExpensePaths(orderId?: string | null) {
   revalidatePath('/reports');
   if (orderId) {
     revalidatePath(`/orders/${orderId}`);
+    revalidatePath(`/orders/${orderId}/edit`);
     revalidatePath(`/orders/${orderId}/statement`);
   }
 }
@@ -122,135 +127,188 @@ export async function createExpenseCategoryForExpenseAction(
   };
 }
 
-export async function createExpenseAction(formData: FormData) {
-  const userId = await getCurrentUserId();
-  const writable = await ensureWritable(userId);
-  if (!writable.ok) {
-    return { error: writable.message };
-  }
+type SaveExpenseResult =
+  | { ok: true; orderId: string | null }
+  | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> };
 
-  const parsed = expenseSchema.safeParse({
+function readExpenseForm(formData: FormData) {
+  return {
     title: formData.get('title'),
     amount: formData.get('amount'),
     currency: formData.get('currency') || DEFAULT_CURRENCY,
     categoryId: formData.get('categoryId'),
     orderId: formData.get('orderId') || '',
+    exchangeRate: formData.get('exchangeRate'),
     expenseDate: formData.get('expenseDate'),
     notes: formData.get('notes') || '',
-  });
+  };
+}
 
+/** Validates and saves an expense. Creates when `expenseId` is null, otherwise updates. */
+async function saveExpense(
+  userId: string,
+  expenseId: string | null,
+  formData: FormData,
+): Promise<SaveExpenseResult> {
+  const writable = await ensureWritable(userId);
+  if (!writable.ok) {
+    return { ok: false, error: writable.message };
+  }
+
+  const parsed = expenseSchema.safeParse(readExpenseForm(formData));
   if (!parsed.success) {
-    return { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors };
+    return {
+      ok: false,
+      error: 'Validation failed',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
   }
 
   const userObjectId = new Types.ObjectId(userId);
-  const category = await ExpenseCategoryModel.findOne({
-    _id: parsed.data.categoryId,
-    userId: userObjectId,
-  });
+  const category = Types.ObjectId.isValid(parsed.data.categoryId)
+    ? await ExpenseCategoryModel.findOne({ _id: parsed.data.categoryId, userId: userObjectId })
+    : null;
   if (!category) {
-    return { error: 'Selected category was not found.' };
+    return { ok: false, error: 'Selected category was not found.' };
   }
 
   let orderId: Types.ObjectId | null = null;
+  let converted: AmountInOrderCurrency = {
+    amount: parsed.data.amount,
+    originalAmount: null,
+    originalCurrency: null,
+    exchangeRate: null,
+  };
   let currency = parsed.data.currency;
   if (parsed.data.orderId) {
-    const order = await OrderModel.findOne({
-      _id: parsed.data.orderId,
-      userId: userObjectId,
-    });
+    const order = Types.ObjectId.isValid(parsed.data.orderId)
+      ? await OrderModel.findOne({ _id: parsed.data.orderId, userId: userObjectId })
+      : null;
     if (!order) {
-      return { error: 'Selected order was not found.' };
+      return { ok: false, error: 'Selected order was not found.' };
     }
     orderId = order._id as Types.ObjectId;
-    // Order-linked expenses must stay in the order currency — no conversion.
+    // Order-linked expenses are always stored in the order currency. One paid in another
+    // currency is converted at the rate the user entered; the original is kept for reference.
     currency = isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY;
+    const conversion = convertToOrderCurrency({
+      amount: parsed.data.amount,
+      enteredCurrency: parsed.data.currency,
+      orderCurrency: currency,
+      quotedRate: parsed.data.exchangeRate,
+    });
+    if (!conversion.ok) {
+      return { ok: false, error: conversion.error };
+    }
+    converted = conversion.value;
   }
 
-  await ExpenseModel.create({
-    userId: userObjectId,
+  const fields = {
     categoryId: category._id,
     orderId,
     title: parsed.data.title,
-    amount: parsed.data.amount,
+    ...converted,
     currency,
     expenseDate: new Date(parsed.data.expenseDate),
     notes: parsed.data.notes ?? '',
-  });
+  };
 
-  revalidateExpensePaths(orderId ? String(orderId) : null);
+  if (expenseId) {
+    const updated = Types.ObjectId.isValid(expenseId)
+      ? await ExpenseModel.findOneAndUpdate(
+          { _id: expenseId, userId: userObjectId },
+          { $set: fields },
+          { new: true },
+        )
+      : null;
+    if (!updated) {
+      return { ok: false, error: 'Expense not found.' };
+    }
+  } else {
+    await ExpenseModel.create({ userId: userObjectId, ...fields });
+  }
+
+  const savedOrderId = orderId ? String(orderId) : null;
+  revalidateExpensePaths(savedOrderId);
+  return { ok: true, orderId: savedOrderId };
+}
+
+export async function createExpenseAction(formData: FormData) {
+  const userId = await getCurrentUserId();
+  const result = await saveExpense(userId, null, formData);
+  if (!result.ok) {
+    return { error: result.error, fieldErrors: result.fieldErrors };
+  }
+
   const returnTo = getSafeReturnTo(formData.get('returnTo'));
   redirect(
-    returnTo || (orderId ? `/orders/${String(orderId)}?expense=created` : '/expenses?created=1'),
+    returnTo ||
+      (result.orderId ? `/orders/${result.orderId}?expense=created` : '/expenses?created=1'),
   );
 }
 
 export async function updateExpenseAction(expenseId: string, formData: FormData) {
   const userId = await getCurrentUserId();
+  const result = await saveExpense(userId, expenseId, formData);
+  if (!result.ok) {
+    return { error: result.error, fieldErrors: result.fieldErrors };
+  }
+
+  redirect(result.orderId ? `/orders/${result.orderId}?expense=updated` : '/expenses?updated=1');
+}
+
+export type OrderExpenseActionResult = {
+  ok: boolean;
+  message: string;
+};
+
+/**
+ * Adds or edits an expense from an order screen. Returns a result instead of
+ * redirecting so the order page can stay open and simply refresh its list.
+ */
+export async function saveOrderExpenseAction(
+  orderId: string,
+  expenseId: string | null,
+  formData: FormData,
+): Promise<OrderExpenseActionResult> {
+  const userId = await getCurrentUserId();
+  // Expenses saved from an order screen always stay linked to that order.
+  formData.set('orderId', orderId);
+
+  const result = await saveExpense(userId, expenseId, formData);
+  if (!result.ok) {
+    const firstFieldError = Object.values(result.fieldErrors ?? {}).flat()[0];
+    return { ok: false, message: firstFieldError ?? result.error };
+  }
+
+  return { ok: true, message: expenseId ? 'Expense updated.' : 'Expense added.' };
+}
+
+export async function deleteOrderExpenseAction(
+  orderId: string,
+  expenseId: string,
+): Promise<OrderExpenseActionResult> {
+  const userId = await getCurrentUserId();
   const writable = await ensureWritable(userId);
   if (!writable.ok) {
-    return { error: writable.message };
+    return { ok: false, message: writable.message };
   }
 
-  const parsed = expenseSchema.safeParse({
-    title: formData.get('title'),
-    amount: formData.get('amount'),
-    currency: formData.get('currency') || DEFAULT_CURRENCY,
-    categoryId: formData.get('categoryId'),
-    orderId: formData.get('orderId') || '',
-    expenseDate: formData.get('expenseDate'),
-    notes: formData.get('notes') || '',
+  if (!Types.ObjectId.isValid(orderId) || !Types.ObjectId.isValid(expenseId)) {
+    return { ok: false, message: 'Expense not found.' };
+  }
+
+  const deleted = await ExpenseModel.findOneAndDelete({
+    _id: new Types.ObjectId(expenseId),
+    orderId: new Types.ObjectId(orderId),
+    userId: new Types.ObjectId(userId),
   });
-
-  if (!parsed.success) {
-    return { error: 'Validation failed', fieldErrors: parsed.error.flatten().fieldErrors };
+  if (!deleted) {
+    return { ok: false, message: 'Expense not found.' };
   }
 
-  const userObjectId = new Types.ObjectId(userId);
-  const category = await ExpenseCategoryModel.findOne({
-    _id: parsed.data.categoryId,
-    userId: userObjectId,
-  });
-  if (!category) {
-    return { error: 'Selected category was not found.' };
-  }
-
-  let orderId: Types.ObjectId | null = null;
-  let currency = parsed.data.currency;
-  if (parsed.data.orderId) {
-    const order = await OrderModel.findOne({
-      _id: parsed.data.orderId,
-      userId: userObjectId,
-    });
-    if (!order) {
-      return { error: 'Selected order was not found.' };
-    }
-    orderId = order._id as Types.ObjectId;
-    currency = isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY;
-  }
-
-  const updated = await ExpenseModel.findOneAndUpdate(
-    { _id: expenseId, userId: userObjectId },
-    {
-      $set: {
-        categoryId: category._id,
-        orderId,
-        title: parsed.data.title,
-        amount: parsed.data.amount,
-        currency,
-        expenseDate: new Date(parsed.data.expenseDate),
-        notes: parsed.data.notes ?? '',
-      },
-    },
-    { new: true },
-  );
-
-  if (!updated) {
-    return { error: 'Expense not found.' };
-  }
-
-  revalidateExpensePaths(orderId ? String(orderId) : null);
-  redirect(orderId ? `/orders/${String(orderId)}?expense=updated` : '/expenses?updated=1');
+  revalidateExpensePaths(orderId);
+  return { ok: true, message: 'Expense deleted.' };
 }
 
 export async function deleteExpenseAction(expenseId: string) {

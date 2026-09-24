@@ -91,7 +91,7 @@ export default async function EditExpensePage({
           currency: (o.currency as CurrencyCode) ?? DEFAULT_CURRENCY,
         }))}
         title="Expense details"
-        description="Updating an order-linked expense keeps currency locked to that order."
+        description="Order-linked expenses are saved in the order currency; other currencies are converted at the rate you enter."
         submitLabel="Save changes"
         defaultValues={{
           title: expense.title as string,
@@ -101,6 +101,9 @@ export default async function EditExpensePage({
           orderId: expense.orderId ? String(expense.orderId) : '',
           expenseDate: new Date(expense.expenseDate as Date).toISOString(),
           notes: (expense.notes as string) ?? '',
+          originalAmount: (expense.originalAmount as number | null) ?? null,
+          originalCurrency: (expense.originalCurrency as string | null) ?? null,
+          exchangeRate: (expense.exchangeRate as number | null) ?? null,
         }}
       />
     </div>

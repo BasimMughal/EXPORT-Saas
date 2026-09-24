@@ -1,7 +1,5 @@
 import Link from 'next/link';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -10,7 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DeleteCustomerButton } from '@/components/shared/customers/delete-customer-button';
+import { ClickableRow } from '@/components/shared/clickable-row';
+import { CountryChip, countryKey } from '@/components/shared/customers/country-chip';
 
 type CustomerRow = {
   id: string;
@@ -25,9 +24,11 @@ type CustomerRow = {
 
 type CustomerTableProps = {
   rows: CustomerRow[];
+  /** Country key → palette position, so every country gets a consistent, distinct colour. */
+  countryColors?: Record<string, number>;
 };
 
-export function CustomerTable({ rows }: CustomerTableProps) {
+export function CustomerTable({ rows, countryColors }: CustomerTableProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <Table>
@@ -39,48 +40,54 @@ export function CustomerTable({ rows }: CustomerTableProps) {
             <TableHead>Phone</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Created</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length ? (
             rows.map((customer) => (
-              <TableRow key={customer.id}>
+              <ClickableRow
+                key={customer.id}
+                href={`/customers/${customer.id}`}
+                label={`Open customer ${customer.company || customer.name}`}
+              >
                 <TableCell className="font-medium">
                   <div className="space-y-1">
-                    <Link href={`/customers/${customer.id}`} className="hover:underline">
+                    <Link
+                      href={`/customers/${customer.id}`}
+                      className="whitespace-nowrap text-primary hover:underline"
+                    >
                       {customer.name}
                     </Link>
                     {customer.notes ? (
-                      <p className="max-w-[360px] truncate text-xs text-muted-foreground">{customer.notes}</p>
+                      <p className="max-w-[360px] truncate text-xs text-muted-foreground">
+                        {customer.notes}
+                      </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">No notes</p>
                     )}
                   </div>
                 </TableCell>
-                <TableCell>{customer.company || <span className="text-muted-foreground">-</span>}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{customer.country}</Badge>
+                  {customer.company || <span className="text-muted-foreground">-</span>}
                 </TableCell>
-                <TableCell>{customer.phone || <span className="text-muted-foreground">-</span>}</TableCell>
-                <TableCell>{customer.email || <span className="text-muted-foreground">-</span>}</TableCell>
-                <TableCell>{customer.createdAt}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/customers/${customer.id}`}>History</Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/customers/${customer.id}/edit`}>Edit</Link>
-                    </Button>
-                    <DeleteCustomerButton customerId={customer.id} />
-                  </div>
+                <TableCell>
+                  <CountryChip
+                    country={customer.country}
+                    colorIndex={countryColors?.[countryKey(customer.country)]}
+                  />
                 </TableCell>
-              </TableRow>
+                <TableCell>
+                  {customer.phone || <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell>
+                  {customer.email || <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">{customer.createdAt}</TableCell>
+              </ClickableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell className="py-10 text-center text-muted-foreground" colSpan={7}>
+              <TableCell className="py-10 text-center text-muted-foreground" colSpan={6}>
                 No customers found.
               </TableCell>
             </TableRow>

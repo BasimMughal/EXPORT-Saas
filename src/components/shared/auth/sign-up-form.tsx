@@ -3,7 +3,6 @@
 import { useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -58,20 +57,8 @@ export function SignUpForm() {
       return;
     }
 
-    const signInResult = await signIn('credentials', {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-      redirectTo: '/dashboard',
-    });
-
-    if (!signInResult || signInResult.error) {
-      router.push('/sign-in?registered=1');
-      return;
-    }
-
-    router.replace('/dashboard');
-    router.refresh();
+    // No automatic sign-in: the new user signs in with their credentials on the next screen.
+    router.replace('/sign-in?registered=1');
   });
 
   return (
@@ -88,7 +75,7 @@ export function SignUpForm() {
           <Input
             id="name"
             autoComplete="name"
-            placeholder="Basim Mughal"
+            placeholder="Your name"
             className="h-11 rounded-xl bg-white"
             {...form.register('name')}
           />

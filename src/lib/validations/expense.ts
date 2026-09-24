@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
 import { CURRENCY_CODES } from '@/config/currency';
+import { exchangeRateField } from '@/lib/validations/payment';
 
 export const expenseSchema = z.object({
   title: z.string().trim().min(2, 'Title must be at least 2 characters').max(160),
   amount: z.coerce.number().min(0, 'Amount must be 0 or greater'),
   currency: z.enum(CURRENCY_CODES).default('PKR'),
+  exchangeRate: exchangeRateField,
   categoryId: z.string().min(1, 'Select a category'),
   orderId: z.string().optional().or(z.literal('')),
   expenseDate: z.string().min(1, 'Expense date is required'),

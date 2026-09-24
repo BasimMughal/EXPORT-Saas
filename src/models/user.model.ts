@@ -1,7 +1,5 @@
 import { Schema, model, models, type InferSchemaType } from 'mongoose';
 
-import { ROLES, type Role } from '@/lib/auth/authorization';
-
 const UserSchema = new Schema(
   {
     name: {
@@ -21,12 +19,6 @@ const UserSchema = new Schema(
       type: String,
       required: true,
       select: false,
-    },
-    role: {
-      type: String,
-      enum: ROLES,
-      default: 'admin',
-      required: true,
     },
     status: {
       type: String,
@@ -50,6 +42,26 @@ const UserSchema = new Schema(
       default: null,
       index: true,
     },
+    /**
+     * Profile photo, stored as a small (≈256px) image. Kept out of normal queries because of
+     * its size; `avatarUpdatedAt` tells whether one exists and versions its URL for caching.
+     */
+    avatar: {
+      type: {
+        data: { type: Buffer, required: true },
+        contentType: {
+          type: String,
+          enum: ['image/jpeg', 'image/png', 'image/webp'],
+          required: true,
+        },
+      },
+      default: null,
+      select: false,
+    },
+    avatarUpdatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -62,7 +74,6 @@ UserSchema.index({ email: 1, createdAt: -1 });
 
 export type UserDocument = InferSchemaType<typeof UserSchema> & {
   _id: Schema.Types.ObjectId;
-  role: Role;
   passwordHash: string;
 };
 

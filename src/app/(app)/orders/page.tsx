@@ -16,18 +16,12 @@ import { isDemoUserId } from '@/lib/auth/demo';
 import { requireSession } from '@/lib/auth/session';
 import { demoStore } from '@/lib/demo/store';
 import { tryConnectMongoose } from '@/lib/db/mongoose';
-import {
-  convertCurrency,
-  DEFAULT_CURRENCY,
-  isCurrencyCode,
-  type CurrencyCode,
-} from '@/config/currency';
-import { getPreferredCurrency } from '@/lib/currency/preferred';
+import { DEFAULT_CURRENCY, type CurrencyCode } from '@/config/currency';
 import { formatCurrency } from '@/lib/formatters';
+import { buildDateRangeFilter } from '@/lib/filters/date-range';
 import { orderFiltersSchema } from '@/lib/validations/order';
 import { CustomerModel } from '@/models/customer.model';
 import { OrderModel } from '@/models/order.model';
-import { PaymentModel } from '@/models/payment.model';
 
 export const metadata: Metadata = {
   title: 'Orders',
@@ -89,11 +83,10 @@ export default async function OrdersPage({
   const rawSearchParams = await Promise.resolve(searchParams);
 
   const parsedFilters = orderFiltersSchema.safeParse({
-    q: firstParam(rawSearchParams.q),
     status: firstParamOrUndefined(rawSearchParams.status),
     customerId: firstParam(rawSearchParams.customerId),
-    sort: firstParamOrUndefined(rawSearchParams.sort),
-    order: firstParamOrUndefined(rawSearchParams.order),
+    from: firstParam(rawSearchParams.from),
+    to: firstParam(rawSearchParams.to),
     page: firstParamOrUndefined(rawSearchParams.page),
     limit: firstParamOrUndefined(rawSearchParams.limit),
   });
@@ -120,11 +113,10 @@ export default async function OrdersPage({
     }));
     const queryString = new URLSearchParams(
       Object.entries({
-        q: params.q,
         status: params.status,
         customerId: params.customerId,
-        sort: params.sort,
-        order: params.order,
+        from: params.from,
+        to: params.to,
         limit: String(params.limit),
       }).filter(([, value]) => value !== ''),
     ).toString();
@@ -142,30 +134,27 @@ export default async function OrdersPage({
             </Button>
           }
         />
-        <OrderStats
-          {...result.stats}
-          totalReceivedAmount={result.stats.totalReceivedAmount}
-          currency={result.displayCurrency}
-        />
+        <OrderStats {...result.stats} />
         <Card className="border-border/70 bg-card shadow-sm">
-          <CardHeader>
-            <CardTitle className="font-display">Order pipeline</CardTitle>
-            <CardDescription>
-              Sample export orders · order value{' '}
-              {formatCurrency(result.stats.totalOrderValue, result.displayCurrency)} · received{' '}
-              {formatCurrency(result.stats.totalReceivedAmount, result.displayCurrency)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div className="space-y-1.5">
+              <CardTitle className="font-display">Order pipeline</CardTitle>
+              <CardDescription>
+                Sample export orders · order value{' '}
+                {formatCurrency(result.stats.totalOrderValue, result.displayCurrency)} · received{' '}
+                {formatCurrency(result.stats.totalReceivedAmount, result.displayCurrency)}
+              </CardDescription>
+            </div>
             <OrderFilters
-              q={params.q}
               status={params.status}
               customerId={params.customerId}
-              sort={params.sort}
-              order={params.order}
+              from={params.from}
+              to={params.to}
               limit={params.limit}
               customers={result.customers}
             />
+          </CardHeader>
+          <CardContent className="space-y-6">
             <OrderTable rows={rows} />
             <OrderPagination page={result.page} totalPages={result.totalPages} queryString={queryString} />
           </CardContent>
@@ -196,13 +185,9 @@ export default async function OrdersPage({
     query.customerId = new Types.ObjectId(params.customerId);
   }
 
-  if (params.q) {
-    query.$or = [
-      { orderNumber: { $regex: params.q, $options: 'i' } },
-      { productName: { $regex: params.q, $options: 'i' } },
-      { description: { $regex: params.q, $options: 'i' } },
-      { notes: { $regex: params.q, $options: 'i' } },
-    ];
+  const orderDateFilter = buildDateRangeFilter(params.from, params.to);
+  if (orderDateFilter) {
+    query.orderDate = orderDateFilter;
   }
 
   const sortDirection = params.order === 'asc' ? 1 : -1;
@@ -218,37 +203,19 @@ export default async function OrdersPage({
     notFound();
   }
 
-  const preferred = await getPreferredCurrency(session.user.id);
-
-  const [matchedOrders, customerDocs, paymentDocs] = await Promise.all([
-    OrderModel.find(query).select('_id status orderValue receivedAmount currency').lean(),
+  const [matchedOrders, customerDocs] = await Promise.all([
+    OrderModel.find(query).select('_id status').lean(),
     CustomerModel.find({ userId: userObjectId }).select('name company').lean(),
-    PaymentModel.find({ userId: userObjectId }).select('orderId amount').lean(),
   ]) as unknown as [
     Array<{
       _id: Types.ObjectId;
       status: OrderListItem['status'];
-      orderValue?: number;
-      receivedAmount?: number;
-      currency?: CurrencyCode | string;
     }>,
     CustomerLite[],
-    Array<{ orderId: Types.ObjectId; amount: number }>,
   ];
-
-  const matchedOrderCurrencies = new Map(
-    matchedOrders.map((order) => [
-      String(order._id),
-      isCurrencyCode(order.currency) ? order.currency : DEFAULT_CURRENCY,
-    ]),
-  );
 
   const stats = {
     totalOrders: matchedOrders.length,
-    totalReceivedAmount: paymentDocs.reduce((sum, payment) => {
-      const currency = matchedOrderCurrencies.get(String(payment.orderId));
-      return currency ? sum + convertCurrency(Number(payment.amount ?? 0), currency, preferred) : sum;
-    }, 0),
     pendingOrders: matchedOrders.filter((o) => o.status === 'pending').length,
     inProgressOrders: matchedOrders.filter((o) => o.status === 'in_progress').length,
     completedOrders: matchedOrders.filter((o) => o.status === 'completed').length,
@@ -287,11 +254,10 @@ export default async function OrdersPage({
 
   const queryString = new URLSearchParams(
     Object.entries({
-      q: params.q,
       status: params.status,
       customerId: params.customerId,
-      sort: params.sort,
-      order: params.order,
+      from: params.from,
+      to: params.to,
       limit: String(params.limit),
     }).filter(([, value]) => value !== ''),
   ).toString();
@@ -327,29 +293,27 @@ export default async function OrdersPage({
       <OrderStats
         abandonedOrders={stats.abandonedOrders}
         completedOrders={stats.completedOrders}
-        currency={preferred}
         inProgressOrders={stats.inProgressOrders}
         pendingOrders={stats.pendingOrders}
         totalOrders={stats.totalOrders}
-        totalReceivedAmount={stats.totalReceivedAmount}
       />
 
       <Card className="border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle>Order Directory</CardTitle>
-          <CardDescription>Search, filter, sort, and manage orders from one place.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle>Order Directory</CardTitle>
+            <CardDescription>Search, filter, sort, and manage orders from one place.</CardDescription>
+          </div>
           <OrderFilters
             customerId={params.customerId}
             customers={customerOptions}
+            from={params.from}
             limit={params.limit}
-            order={params.order}
-            q={params.q}
-            sort={params.sort}
             status={params.status}
+            to={params.to}
           />
-
+        </CardHeader>
+        <CardContent className="space-y-6">
           <OrderTable rows={rows} />
 
           <OrderPagination page={params.page} queryString={queryString} totalPages={totalPages} />

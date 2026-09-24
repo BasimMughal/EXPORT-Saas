@@ -2,10 +2,16 @@ import { z } from 'zod';
 import { Types } from 'mongoose';
 
 import { CURRENCY_CODES } from '@/config/currency';
+import { filterDateSchema } from '@/lib/filters/date-range';
 
 export const ORDER_STATUSES = ['pending', 'in_progress', 'completed', 'abandoned'] as const;
 
-const optionalText = z.string().trim().max(1000, 'Must be 1000 characters or fewer').optional().default('');
+const optionalText = z
+  .string()
+  .trim()
+  .max(1000, 'Must be 1000 characters or fewer')
+  .optional()
+  .default('');
 
 const optionalDate = z.preprocess((value) => {
   if (value === '' || value == null) {
@@ -22,8 +28,10 @@ export const orderSchema = z.object({
     .min(1, 'Customer is required')
     .refine((value) => Types.ObjectId.isValid(value), 'Select a valid customer'),
   productName: z.string().trim().min(2, 'Product name must be at least 2 characters').max(150),
-  description: z.string().trim().max(1000).optional().default(''),
-  quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be at least 1'),
+  quantity: z.coerce
+    .number()
+    .int('Quantity must be a whole number')
+    .positive('Quantity must be at least 1'),
   orderValue: z.coerce.number().min(0, 'Order value cannot be negative'),
   currency: z.enum(CURRENCY_CODES).default('PKR'),
   orderDate: z.coerce.date(),
@@ -32,11 +40,17 @@ export const orderSchema = z.object({
   notes: optionalText,
 });
 
+/** Order fields without the customer — used when the customer is created inline with the order. */
+export const orderDetailsSchema = orderSchema.omit({ customerId: true });
+
 export const orderFiltersSchema = z.object({
   q: z.string().trim().max(200).optional().default(''),
   status: z.enum(['', ...ORDER_STATUSES]).default(''),
   customerId: z.string().trim().optional().default(''),
   currency: z.enum(['', ...CURRENCY_CODES]).default(''),
+  /** Order date range, inclusive. */
+  from: filterDateSchema,
+  to: filterDateSchema,
   sort: z
     .enum([
       'orderNumber',

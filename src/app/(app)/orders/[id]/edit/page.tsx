@@ -3,10 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Types } from 'mongoose';
 
-import { createExpenseAction } from '@/app/(app)/expenses/actions';
 import { updateOrderAction } from '@/app/(app)/orders/actions';
-import { ExpenseForm } from '@/components/shared/expenses/expense-form';
 import { OrderForm } from '@/components/shared/orders/order-form';
+import { OrderQuickAddMenu } from '@/components/shared/orders/order-quick-add-menu';
 import { Button } from '@/components/ui/button';
 import { DEFAULT_CURRENCY, type CurrencyCode } from '@/config/currency';
 import { requireSession } from '@/lib/auth/session';
@@ -26,17 +25,9 @@ type CustomerLite = {
   company?: string | null;
 };
 
-export default async function EditOrderPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
   const { id } = await Promise.resolve(params);
-  const rawSearch = await Promise.resolve(searchParams);
-  const flash = rawSearch.expense === 'created' ? 'Expense added to this order.' : '';
 
   if (!Types.ObjectId.isValid(id)) {
     notFound();
@@ -44,23 +35,20 @@ export default async function EditOrderPage({
 
   await connectMongoose();
 
+  const userObjectId = new Types.ObjectId(session.user.id);
   const [order, customers, categories] = (await Promise.all([
     OrderModel.findOne({
       _id: new Types.ObjectId(id),
       userId: new Types.ObjectId(session.user.id),
     }).lean(),
     CustomerModel.find({ userId: session.user.id }).select('name company').sort({ name: 1 }).lean(),
-    ExpenseCategoryModel.find({ userId: new Types.ObjectId(session.user.id) })
-      .select('name')
-      .sort({ name: 1 })
-      .lean(),
+    ExpenseCategoryModel.find({ userId: userObjectId }).select('name').sort({ name: 1 }).lean(),
   ])) as unknown as [
     {
       _id: Types.ObjectId;
       customerId: Types.ObjectId;
       orderNumber: string;
       productName: string;
-      description?: string | null;
       quantity: number;
       orderValue?: number;
       receivedAmount?: number;
@@ -97,6 +85,10 @@ export default async function EditOrderPage({
   }
 
   const orderCurrency = (order.currency as CurrencyCode | undefined) ?? DEFAULT_CURRENCY;
+  const categoryOptions = categories.map((category) => ({
+    id: String(category._id),
+    label: category.name,
+  }));
 
   return (
     <div className="space-y-6">
@@ -112,21 +104,14 @@ export default async function EditOrderPage({
         </Button>
       </div>
 
-      {flash ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {flash}
-        </div>
-      ) : null}
-
       <OrderForm
         action={updateOrderAction.bind(null, id)}
         customers={customerOptions}
-        description="Update order details with server-side validation and ownership checks."
+        description="Update order details."
         initialValues={{
           orderNumber: order.orderNumber,
           customerId: order.customerId.toString(),
           productName: order.productName,
-          description: order.description ?? '',
           quantity: String(order.quantity),
           orderValue: String(order.orderValue ?? order.receivedAmount ?? 0),
           currency: order.currency ?? 'PKR',
@@ -137,30 +122,15 @@ export default async function EditOrderPage({
         }}
         submitLabel="Save Changes"
         title="Order Details"
-      />
-
-      <ExpenseForm
-        action={createExpenseAction}
-        categories={categories.map((category) => ({
-          id: String(category._id),
-          label: category.name,
-        }))}
-        orders={[
-          {
-            id,
-            label: `${order.orderNumber} — ${order.productName}`,
-            currency: orderCurrency,
-          },
-        ]}
-        title="Add expense"
-        description="Add expenses for this order without leaving the edit screen."
-        submitLabel="Save expense"
-        defaultValues={{
-          orderId: id,
-          currency: orderCurrency,
-        }}
-        lockOrderId
-        returnTo={`/orders/${id}/edit?expense=created`}
+        headerAction={
+          <OrderQuickAddMenu
+            orderId={id}
+            orderNumber={order.orderNumber}
+            productName={order.productName}
+            currency={orderCurrency}
+            categories={categoryOptions}
+          />
+        }
       />
     </div>
   );
