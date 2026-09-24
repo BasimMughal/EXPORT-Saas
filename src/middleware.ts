@@ -13,6 +13,19 @@ const PUBLIC_PREFIXES = [
   '/sitemap.xml',
 ];
 
+const SESSION_COOKIE = 'authjs.session-token';
+const SECURE_SESSION_COOKIE = `__Secure-${SESSION_COOKIE}`;
+
+function getSessionCookieName(request: NextRequest) {
+  const hasSecureSessionCookie = request.cookies
+    .getAll()
+    .some(
+      ({ name }) => name === SECURE_SESSION_COOKIE || name.startsWith(`${SECURE_SESSION_COOKIE}.`),
+    );
+
+  return hasSecureSessionCookie ? SECURE_SESSION_COOKIE : SESSION_COOKIE;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -26,6 +39,10 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
+    // Auth.js prefixes production cookies with `__Secure-` and uses that full
+    // cookie name as the JWT salt. getToken() otherwise defaults to the
+    // unprefixed development cookie and silently returns null on Vercel.
+    cookieName: getSessionCookieName(request),
   });
 
   if (!token) {
