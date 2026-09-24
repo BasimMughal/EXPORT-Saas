@@ -124,7 +124,9 @@ export function OrderStatementView({ payload }: { payload: StatementPayload }) {
       >
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Order statement</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Order statement
+            </p>
             <h1 className="font-display mt-1 text-2xl font-semibold">{payload.orderNumber}</h1>
             <p className="text-muted-foreground">{payload.productName}</p>
           </div>
@@ -189,9 +191,7 @@ export function OrderStatementView({ payload }: { payload: StatementPayload }) {
                       payment.method}
                   </td>
                   <td>{payment.referenceNumber || '—'}</td>
-                  <td className="text-right">
-                    {formatCurrency(payment.amount, payload.currency)}
-                  </td>
+                  <td className="text-right">{formatCurrency(payment.amount, payload.currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -215,9 +215,7 @@ export function OrderStatementView({ payload }: { payload: StatementPayload }) {
                   <td className="py-2">{expense.title}</td>
                   <td>{expense.categoryName}</td>
                   <td>{formatDateDisplay(expense.expenseDate)}</td>
-                  <td className="text-right">
-                    {formatCurrency(expense.amount, payload.currency)}
-                  </td>
+                  <td className="text-right">{formatCurrency(expense.amount, payload.currency)}</td>
                 </tr>
               ))}
             </tbody>

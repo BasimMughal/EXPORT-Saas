@@ -8,7 +8,7 @@ export async function generateOrderNumber(userId: string) {
     { _id: counterId },
     {
       $inc: { sequence: 1 },
-      $setOnInsert: { _id: counterId, sequence: 0 },
+      $setOnInsert: { _id: counterId },
     },
     { new: true, upsert: true },
   ).lean()) as unknown as { sequence?: number } | null;

@@ -1,17 +1,23 @@
 'use client';
 
+import { useId, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { CurrencySelect } from '@/components/shared/currency-select';
+import { ExchangeRateField } from '@/components/shared/exchange-rate-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DEFAULT_CURRENCY, type CurrencyCode } from '@/config/currency';
+import { toQuotedRate } from '@/lib/finance/currency-conversion';
 import { formatDateInput } from '@/lib/formatters';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/lib/validations/payment';
 
 type OrderOption = {
   id: string;
   label: string;
+  currency?: CurrencyCode | string;
 };
 
 type PaymentFormProps = {
@@ -24,10 +30,19 @@ type PaymentFormProps = {
     method?: string;
     referenceNumber?: string;
     notes?: string;
+    /** Set when the payment was received in another currency and converted. */
+    originalAmount?: number | null;
+    originalCurrency?: CurrencyCode | string | null;
+    /** Stored-convention rate (see lib/finance/currency-conversion). */
+    exchangeRate?: number | null;
   };
   lockOrderId?: boolean;
   submitLabel?: string;
   title?: string;
+  /** `plain` drops the card chrome so the form can sit inside a dialog. */
+  variant?: 'card' | 'plain';
+  /** Shows a Cancel button next to submit. */
+  onCancel?: () => void;
 };
 
 function SubmitButton({ label }: { label: string }) {
@@ -46,37 +61,69 @@ export function PaymentForm({
   lockOrderId,
   submitLabel = 'Save payment',
   title = 'Payment details',
+  variant = 'card',
+  onCancel,
 }: PaymentFormProps) {
+  // Unique ids so this form never clashes with another form on the same page.
+  const uid = useId();
+  const fieldId = (name: string) => `${uid}-${name}`;
+
+  const [orderId, setOrderId] = useState(defaultValues?.orderId ?? '');
+  const orderCurrency =
+    (orders.find((order) => order.id === orderId)?.currency as CurrencyCode | undefined) ?? null;
+
+  // Amount and currency are what was actually received; for a converted payment that's the
+  // original, not the stored order-currency amount.
+  const [amount, setAmount] = useState(
+    String(defaultValues?.originalAmount ?? defaultValues?.amount ?? ''),
+  );
+  const [currency, setCurrency] = useState<CurrencyCode>(
+    () => (defaultValues?.originalCurrency ?? orderCurrency ?? DEFAULT_CURRENCY) as CurrencyCode,
+  );
+  const needsRate = orderCurrency !== null && currency !== orderCurrency;
+  const savedRate =
+    orderCurrency && defaultValues?.exchangeRate && defaultValues.originalCurrency === currency
+      ? toQuotedRate(defaultValues.exchangeRate, orderCurrency, currency)
+      : undefined;
+
+  function handleOrderChange(nextOrderId: string) {
+    setOrderId(nextOrderId);
+    const nextOrder = orders.find((order) => order.id === nextOrderId);
+    if (nextOrder?.currency) {
+      setCurrency(nextOrder.currency as CurrencyCode);
+    }
+  }
+
   async function handleAction(formData: FormData) {
     await action(formData);
   }
 
   return (
-    <form action={handleAction} className="surface-card space-y-4 p-6">
-      <div>
-        <h2 className="font-display text-xl font-semibold">{title}</h2>
-        <p className="text-sm text-muted-foreground">
-          Record an installment or full payment against an order.
-        </p>
-      </div>
+    <form
+      action={handleAction}
+      className={variant === 'card' ? 'surface-card space-y-4 p-6' : 'space-y-4'}
+    >
+      {variant === 'card' ? (
+        <div>
+          <h2 className="font-display text-xl font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">
+            Record an installment or full payment against an order.
+          </p>
+        </div>
+      ) : null}
 
-      <div className="space-y-2">
-        <Label htmlFor="orderId">Order</Label>
-        {lockOrderId ? (
-          <>
-            <input type="hidden" name="orderId" value={defaultValues?.orderId ?? ''} />
-            <Input
-              readOnly
-              value={orders.find((o) => o.id === defaultValues?.orderId)?.label ?? defaultValues?.orderId}
-              className="rounded-xl"
-            />
-          </>
-        ) : (
+      {/* A locked order is already named by the surrounding page or dialog, so no field is shown. */}
+      {lockOrderId ? (
+        <input type="hidden" name="orderId" value={orderId} />
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor={fieldId('orderId')}>Order</Label>
           <select
-            id="orderId"
+            id={fieldId('orderId')}
             name="orderId"
             required
-            defaultValue={defaultValues?.orderId ?? ''}
+            value={orderId}
+            onChange={(event) => handleOrderChange(event.target.value)}
             className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
           >
             <option value="">Select an order</option>
@@ -86,27 +133,49 @@ export function PaymentForm({
               </option>
             ))}
           </select>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="amount">Amount</Label>
+          <Label htmlFor={fieldId('amount')}>Amount</Label>
           <Input
-            id="amount"
+            id={fieldId('amount')}
             name="amount"
             type="number"
             min="0.01"
             step="0.01"
             required
-            defaultValue={defaultValues?.amount ?? ''}
+            placeholder="0.00"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
             className="rounded-xl"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="paymentDate">Payment date</Label>
+          <Label htmlFor={fieldId('currency')}>Currency</Label>
+          <CurrencySelect
+            id={fieldId('currency')}
+            name="currency"
+            value={currency}
+            onChange={setCurrency}
+          />
+        </div>
+
+        {needsRate ? (
+          <ExchangeRateField
+            key={`${currency}-${orderCurrency}`}
+            enteredCurrency={currency}
+            orderCurrency={orderCurrency}
+            amount={amount}
+            defaultRate={savedRate}
+          />
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor={fieldId('paymentDate')}>Payment date</Label>
           <Input
-            id="paymentDate"
+            id={fieldId('paymentDate')}
             name="paymentDate"
             type="date"
             required
@@ -114,13 +183,10 @@ export function PaymentForm({
             className="rounded-xl"
           />
         </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="method">Payment method</Label>
+          <Label htmlFor={fieldId('method')}>Payment method</Label>
           <select
-            id="method"
+            id={fieldId('method')}
             name="method"
             required
             defaultValue={defaultValues?.method ?? 'bank_transfer'}
@@ -133,22 +199,23 @@ export function PaymentForm({
             ))}
           </select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="referenceNumber">Reference number</Label>
-          <Input
-            id="referenceNumber"
-            name="referenceNumber"
-            placeholder="Optional"
-            defaultValue={defaultValues?.referenceNumber ?? ''}
-            className="rounded-xl"
-          />
-        </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
+        <Label htmlFor={fieldId('referenceNumber')}>Reference number</Label>
+        <Input
+          id={fieldId('referenceNumber')}
+          name="referenceNumber"
+          placeholder="Optional"
+          defaultValue={defaultValues?.referenceNumber ?? ''}
+          className="rounded-xl"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={fieldId('notes')}>Notes</Label>
         <Textarea
-          id="notes"
+          id={fieldId('notes')}
           name="notes"
           placeholder="Optional"
           defaultValue={defaultValues?.notes ?? ''}
@@ -156,7 +223,14 @@ export function PaymentForm({
         />
       </div>
 
-      <SubmitButton label={submitLabel} />
+      <div className={onCancel ? 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end' : ''}>
+        {onCancel ? (
+          <Button type="button" variant="outline" className="rounded-xl" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : null}
+        <SubmitButton label={submitLabel} />
+      </div>
     </form>
   );
 }

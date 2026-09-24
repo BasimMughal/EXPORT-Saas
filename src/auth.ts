@@ -3,7 +3,6 @@ import Credentials from 'next-auth/providers/credentials';
 import type { Types } from 'mongoose';
 
 import { env } from '@/env';
-import { ROLE_PERMISSIONS, type Role } from '@/lib/auth/authorization';
 import { verifyPassword } from '@/lib/auth/password';
 import { connectMongoose } from '@/lib/db/mongoose';
 import { signInSchema } from '@/lib/validations/auth';
@@ -14,7 +13,6 @@ type AuthUserRecord = {
   name: string;
   email: string;
   passwordHash: string;
-  role: Role;
   organizationId: Types.ObjectId | null;
 };
 
@@ -69,22 +67,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        await UserModel.updateOne(
-          { _id: user._id },
-          {
-            $set: {
-              lastLoginAt: new Date(),
-            },
-          },
-        );
+        await UserModel.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
 
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          role: user.role as Role,
           organizationId: user.organizationId ? user.organizationId.toString() : null,
-          permissions: ROLE_PERMISSIONS[user.role as Role],
         };
       },
     }),
@@ -92,9 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
         token.organizationId = user.organizationId;
-        token.permissions = user.permissions;
       }
 
       return token;
@@ -102,9 +89,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? '';
-        session.user.role = (token.role ?? 'viewer') as Role;
         session.user.organizationId = token.organizationId ?? null;
-        session.user.permissions = token.permissions ?? [];
       }
 
       return session;

@@ -4,10 +4,10 @@ import { notFound } from 'next/navigation';
 import { Types } from 'mongoose';
 
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { CustomerActionsMenu } from '@/components/shared/customers/customer-actions-menu';
 import { DemoModeBanner } from '@/components/shared/demo-mode-banner';
 import { OrderStatusBadge } from '@/components/shared/orders/order-status-badge';
 import { PageHeader } from '@/components/shared/page-header';
-import { PaymentTable } from '@/components/shared/payments/payment-table';
 import { Button } from '@/components/ui/button';
 import { isDemoUserId } from '@/lib/auth/demo';
 import { requireSession } from '@/lib/auth/session';
@@ -24,7 +24,6 @@ import { computeOrderFinancials, resolveOrderValue } from '@/lib/finance/order-f
 import { formatCurrency, formatDateDisplay } from '@/lib/formatters';
 import { CustomerModel } from '@/models/customer.model';
 import { ExpenseModel } from '@/models/expense.model';
-import { ExpenseCategoryModel } from '@/models/expense-category.model';
 import { OrderModel } from '@/models/order.model';
 import { PaymentModel } from '@/models/payment.model';
 
@@ -32,11 +31,7 @@ export const metadata: Metadata = {
   title: 'Customer History',
 };
 
-export default async function CustomerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
   const { id } = await Promise.resolve(params);
   const useDemo = isDemoUserId(session.user.id);
@@ -44,7 +39,7 @@ export default async function CustomerDetailPage({
   if (useDemo) {
     const history = demoStore.getCustomerHistory(id);
     if (!history) notFound();
-    const { customer, orders, payments, expenses, totals, displayCurrency } = history;
+    const { customer, orders, totals, displayCurrency } = history;
 
     return (
       <CustomerHistoryView
@@ -58,26 +53,6 @@ export default async function CustomerDetailPage({
           currency: o.currency,
           orderDate: o.orderDate,
           financials: o.financials,
-        }))}
-        payments={payments.map((p) => ({
-          id: p.id,
-          orderId: p.orderId,
-          orderNumber: p.orderNumber,
-          amount: p.amount,
-          currency: p.currency,
-          paymentDate: p.paymentDate,
-          method: p.method,
-          referenceNumber: p.referenceNumber,
-          notes: p.notes,
-        }))}
-        expenses={expenses.map((e) => ({
-          id: e.id,
-          title: e.title,
-          categoryName: e.categoryName,
-          orderNumber: e.orderNumber,
-          amount: e.amount,
-          currency: e.currency,
-          expenseDate: e.expenseDate,
         }))}
         totals={totals}
         displayCurrency={displayCurrency}
@@ -114,18 +89,15 @@ export default async function CustomerDetailPage({
     .lean();
 
   const orderIds = orders.map((o) => o._id);
-  const [payments, expenses, categories] = await Promise.all([
+  // Only amounts are needed: payments and expenses feed the per-order totals below.
+  const [payments, expenses] = await Promise.all([
     PaymentModel.find({ userId: userObjectId, orderId: { $in: orderIds } })
-      .sort({ paymentDate: -1 })
+      .select('orderId amount')
       .lean(),
     ExpenseModel.find({ userId: userObjectId, orderId: { $in: orderIds } })
-      .sort({ expenseDate: -1 })
+      .select('orderId amount')
       .lean(),
-    ExpenseCategoryModel.find({ userId: userObjectId }).lean(),
   ]);
-
-  const categoryMap = new Map(categories.map((c) => [String(c._id), c.name as string]));
-  const orderMap = new Map(orders.map((o) => [String(o._id), o]));
 
   const paymentsByOrder = new Map<string, Array<{ amount: number }>>();
   for (const payment of payments) {
@@ -201,32 +173,6 @@ export default async function CustomerDetailPage({
         userId: session.user.id,
       }}
       orders={orderRows}
-      payments={payments.map((p) => {
-        const order = orderMap.get(String(p.orderId));
-        return {
-          id: String(p._id),
-          orderId: String(p.orderId),
-          orderNumber: (order?.orderNumber as string) ?? '',
-          amount: Number(p.amount),
-          currency: String(order?.currency ?? 'PKR'),
-          paymentDate: new Date(p.paymentDate as Date).toISOString(),
-          method: String(p.method),
-          referenceNumber: (p.referenceNumber as string) ?? '',
-          notes: (p.notes as string) ?? '',
-        };
-      })}
-      expenses={expenses.map((e) => {
-        const order = e.orderId ? orderMap.get(String(e.orderId)) : null;
-        return {
-          id: String(e._id),
-          title: e.title as string,
-          categoryName: categoryMap.get(String(e.categoryId)) ?? '—',
-          orderNumber: (order?.orderNumber as string) ?? '',
-          amount: Number(e.amount),
-          currency: String(e.currency ?? 'PKR'),
-          expenseDate: new Date(e.expenseDate as Date).toISOString(),
-        };
-      })}
       totals={totals}
       displayCurrency={preferred}
     />
@@ -256,26 +202,6 @@ function CustomerHistoryView(props: {
     orderDate: string;
     financials: ReturnType<typeof computeOrderFinancials>;
   }>;
-  payments: Array<{
-    id: string;
-    orderId: string;
-    orderNumber: string;
-    amount: number;
-    currency: string;
-    paymentDate: string;
-    method: string;
-    referenceNumber: string;
-    notes: string;
-  }>;
-  expenses: Array<{
-    id: string;
-    title: string;
-    categoryName: string;
-    orderNumber: string;
-    amount: number;
-    currency: string;
-    expenseDate: string;
-  }>;
   totals: {
     totalOrderValue: number;
     totalPaymentsReceived: number;
@@ -300,14 +226,11 @@ function CustomerHistoryView(props: {
         title={props.customer.company || props.customer.name}
         description="Complete order, payment, expense, and profit history."
         actions={
-          <div className="flex gap-2">
-            <Button asChild variant="outline" className="rounded-xl">
-              <Link href={`/customers/${props.customer.id}/edit`}>Edit</Link>
-            </Button>
-            <Button asChild className="rounded-xl">
-              <Link href={`/orders/new?customerId=${props.customer.id}`}>New order</Link>
-            </Button>
-          </div>
+          <CustomerActionsMenu
+            customerId={props.customer.id}
+            customerName={props.customer.company || props.customer.name}
+            orderCount={props.orders.length}
+          />
         }
       />
 
@@ -384,9 +307,6 @@ function CustomerHistoryView(props: {
                     <p className="font-medium">
                       {formatCurrency(order.financials.orderValue, order.currency)}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Cash {formatCurrency(order.financials.cashProfit, order.currency)}
-                    </p>
                   </div>
                   <Button asChild size="sm" variant="outline" className="rounded-xl">
                     <Link href={`/orders/${order.id}/statement`}>Invoice</Link>
@@ -396,36 +316,6 @@ function CustomerHistoryView(props: {
             ))
           )}
         </div>
-      </section>
-
-      <section className="surface-card space-y-4 p-5">
-        <h2 className="font-display text-lg font-semibold">Payment history</h2>
-        <PaymentTable rows={props.payments} />
-      </section>
-
-      <section className="surface-card space-y-4 p-5">
-        <h2 className="font-display text-lg font-semibold">Expense history</h2>
-        {props.expenses.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No expenses for this customer&apos;s orders.</p>
-        ) : (
-          <div className="space-y-2">
-            {props.expenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{expense.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {expense.categoryName} · {expense.orderNumber || '—'} ·{' '}
-                    {formatDateDisplay(expense.expenseDate)}
-                  </p>
-                </div>
-                <p className="font-medium">{formatCurrency(expense.amount, expense.currency)}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
     </div>
   );

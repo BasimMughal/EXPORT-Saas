@@ -67,7 +67,11 @@ export default async function NewExpensePage({
       {useDemo ? <DemoModeBanner /> : null}
       <PageHeader
         title="Add expense"
-        description="Order-linked expenses stay in the order currency with no conversion."
+        description={
+          preselected
+            ? `Track a cost for ${preselected.label}. Amounts are recorded in ${preselected.currency}.`
+            : 'Track a business cost. Link it to an order to include it in that order’s profit.'
+        }
         actions={
           <Button asChild variant="outline" className="rounded-xl">
             <Link href={orderIdParam ? `/orders/${orderIdParam}` : '/expenses'}>Back</Link>
@@ -79,7 +83,11 @@ export default async function NewExpensePage({
         categories={categories}
         orders={orders}
         title="Expense details"
-        description="If you link an order, currency is locked to that order."
+        description={
+          preselected
+            ? 'Enter the cost details below.'
+            : 'Linking an order sets the currency to match that order.'
+        }
         submitLabel="Save expense"
         defaultValues={{
           orderId: preselected?.id,

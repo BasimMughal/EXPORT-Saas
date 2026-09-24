@@ -3,43 +3,40 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Session } from 'next-auth';
-import { Menu, Plus, Ship, X } from 'lucide-react';
+import { Menu, Ship, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 import { SignOutButton } from '@/components/shared/auth/sign-out-button';
+import { UserAvatar } from '@/components/shared/user-avatar';
 import { Button } from '@/components/ui/button';
-import { sidebarNavigation, type NavItem } from '@/config/navigation';
+import { headerOnlyPages, sidebarNavigation, type NavItem } from '@/config/navigation';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 
 type AppShellProps = {
   children: ReactNode;
   session: Session;
+  /** Profile photo URL, or null to show initials. */
+  avatarUrl: string | null;
 };
 
 const sectionFor = (item: NavItem) => {
   if (item.href === '/dashboard') return 'Overview';
   if (['/customers', '/orders'].includes(item.href)) return 'Operations';
-  if (['/payments', '/expenses', '/expense-categories', '/reports'].includes(item.href)) {
+  if (['/payments', '/reports'].includes(item.href)) {
     return 'Finance';
   }
   return 'Workspace';
 };
 
-export function AppShell({ children, session }: AppShellProps) {
+export function AppShell({ children, session, avatarUrl }: AppShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const role = session.user.role;
-  const visibleNav = sidebarNavigation.filter((item) => !item.roles || item.roles.includes(role));
-  const activeItem = visibleNav.find(
+  const visibleNav = sidebarNavigation;
+  const activeItem = [...visibleNav, ...headerOnlyPages].find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   );
-  const initials = (session.user.name ?? session.user.email ?? 'U')
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const displayName = session.user.name ?? session.user.email ?? 'User';
 
   const nav = (
     <nav className="space-y-6">
@@ -109,18 +106,6 @@ export function AppShell({ children, session }: AppShellProps) {
       <div className="flex-1 overflow-y-auto px-3 py-5">{nav}</div>
 
       <div className="border-t border-white/10 p-3">
-        <div className="mb-2 flex items-center gap-3 rounded-xl bg-white/5 p-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white">
-            {initials}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{session.user.name ?? 'User'}</p>
-            <p className="truncate text-[11px] text-slate-500">{session.user.email}</p>
-          </div>
-          <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-400">
-            {session.user.role}
-          </span>
-        </div>
         <SignOutButton className="h-9 w-full justify-start rounded-lg px-3 text-slate-400 hover:bg-white/10 hover:text-white" />
       </div>
     </div>
@@ -177,19 +162,22 @@ export function AppShell({ children, session }: AppShellProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button asChild size="sm" className="h-9 rounded-lg shadow-none">
-                <Link href="/orders/new">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">New order</span>
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-lg bg-card">
-                <Link href="/profile" aria-label="Open profile">
-                  <span className="text-[11px] font-bold">{initials}</span>
-                </Link>
-              </Button>
-            </div>
+            {/* Profile shortcut lives on the dashboard only. */}
+            {pathname === '/dashboard' ? (
+              <Link
+                href="/profile"
+                aria-label="Open profile"
+                title="Profile"
+                className="overflow-hidden rounded-lg border border-border bg-card shadow-sm transition hover:ring-2 hover:ring-primary/20"
+              >
+                <UserAvatar
+                  name={displayName}
+                  avatarUrl={avatarUrl}
+                  size={36}
+                  fallbackClassName="text-[11px] text-foreground"
+                />
+              </Link>
+            ) : null}
           </div>
         </header>
 

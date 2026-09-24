@@ -3,24 +3,25 @@ import {
   FileBarChart2,
   LayoutDashboard,
   Package,
-  Receipt,
-  Tags,
-  UserCog,
-  UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react';
-
-import type { Role } from '@/lib/auth/authorization';
 
 export type NavItem = {
   title: string;
   href: string;
   icon: LucideIcon;
   description: string;
-  /** If set, only these roles see the item in the sidebar. */
-  roles?: Role[];
 };
+
+/** Pages reached from the header rather than the sidebar; used for the header title. */
+export const headerOnlyPages: Array<Pick<NavItem, 'title' | 'href' | 'description'>> = [
+  {
+    title: 'Profile',
+    href: '/profile',
+    description: 'Account settings',
+  },
+];
 
 export const sidebarNavigation: NavItem[] = [
   {
@@ -48,34 +49,9 @@ export const sidebarNavigation: NavItem[] = [
     description: 'Payment history',
   },
   {
-    title: 'Expenses',
-    href: '/expenses',
-    icon: Receipt,
-    description: 'Cost tracking',
-  },
-  {
-    title: 'Categories',
-    href: '/expense-categories',
-    icon: Tags,
-    description: 'Expense taxonomy',
-  },
-  {
     title: 'Reports',
     href: '/reports',
     icon: FileBarChart2,
     description: 'Export & insights',
-  },
-  {
-    title: 'Users',
-    href: '/users',
-    icon: UserCog,
-    description: 'Signup registry',
-    roles: ['owner', 'admin'],
-  },
-  {
-    title: 'Profile',
-    href: '/profile',
-    icon: UserRound,
-    description: 'Account settings',
   },
 ];

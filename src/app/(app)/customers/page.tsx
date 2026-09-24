@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { CustomerFilters } from '@/components/shared/customers/customer-filters';
@@ -15,6 +15,7 @@ import { isDemoUserId } from '@/lib/auth/demo';
 import { requireSession } from '@/lib/auth/session';
 import { demoStore } from '@/lib/demo/store';
 import { tryConnectMongoose } from '@/lib/db/mongoose';
+import { buildDateRangeFilter } from '@/lib/filters/date-range';
 import { formatDateDisplay } from '@/lib/formatters';
 import { customerFiltersSchema } from '@/lib/validations/customer';
 import { CustomerModel } from '@/models/customer.model';
@@ -53,10 +54,9 @@ export default async function CustomersPage({
   const session = await requireSession();
   const rawSearchParams = await Promise.resolve(searchParams);
   const parsedFilters = customerFiltersSchema.safeParse({
-    q: firstParam(rawSearchParams.q),
     country: firstParam(rawSearchParams.country),
-    sort: firstParamOrUndefined(rawSearchParams.sort),
-    order: firstParamOrUndefined(rawSearchParams.order),
+    from: firstParam(rawSearchParams.from),
+    to: firstParam(rawSearchParams.to),
     page: firstParamOrUndefined(rawSearchParams.page),
     limit: firstParamOrUndefined(rawSearchParams.limit),
   });
@@ -79,10 +79,9 @@ export default async function CustomersPage({
     }));
     const queryString = new URLSearchParams(
       Object.entries({
-        q: params.q,
         country: params.country,
-        sort: params.sort,
-        order: params.order,
+        from: params.from,
+        to: params.to,
         limit: String(params.limit),
       }).filter(([, value]) => value !== ''),
     ).toString();
@@ -93,7 +92,7 @@ export default async function CustomersPage({
         <DemoModeBanner />
         <PageHeader
           title="Customers"
-          description="Buyer directory with search, filters, and tenant isolation."
+          description="Your buyers, with their orders, payments and profit history."
           actions={
             <Button asChild className="rounded-xl">
               <Link href="/customers/new">Create Customer</Link>
@@ -101,21 +100,26 @@ export default async function CustomersPage({
           }
         />
         <Card className="border-border/70 bg-card shadow-sm">
-          <CardHeader>
-            <CardTitle className="font-display">Customer Directory</CardTitle>
-            <CardDescription>Sample garment export buyers for demo browsing.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div className="space-y-1.5">
+              <CardTitle className="font-display">Customer Directory</CardTitle>
+              <CardDescription>Sample garment export buyers for demo browsing.</CardDescription>
+            </div>
             <CustomerFilters
-              q={params.q}
               country={params.country}
-              sort={params.sort}
-              order={params.order}
+              from={params.from}
+              to={params.to}
               limit={params.limit}
               countries={result.countries}
             />
+          </CardHeader>
+          <CardContent className="space-y-6">
             <CustomerTable rows={tableRows} />
-            <CustomerPagination page={result.page} totalPages={result.totalPages} queryString={queryString} />
+            <CustomerPagination
+              page={result.page}
+              totalPages={result.totalPages}
+              queryString={queryString}
+            />
           </CardContent>
         </Card>
       </div>
@@ -136,16 +140,8 @@ export default async function CustomersPage({
   };
 
   if (params.country) query.country = params.country;
-  if (params.q) {
-    query.$or = [
-      { name: { $regex: params.q, $options: 'i' } },
-      { company: { $regex: params.q, $options: 'i' } },
-      { country: { $regex: params.q, $options: 'i' } },
-      { phone: { $regex: params.q, $options: 'i' } },
-      { email: { $regex: params.q, $options: 'i' } },
-      { notes: { $regex: params.q, $options: 'i' } },
-    ];
-  }
+  const createdDateFilter = buildDateRangeFilter(params.from, params.to);
+  if (createdDateFilter) query.createdAt = createdDateFilter;
 
   const sortDirection = params.order === 'asc' ? 1 : -1;
   const sort = { [params.sort]: sortDirection } as Record<string, 1 | -1>;
@@ -161,7 +157,24 @@ export default async function CustomersPage({
   const totalPages = Math.max(1, Math.ceil(totalCount / params.limit));
   if (params.page > totalPages && totalCount > 0) notFound();
 
-  const countries = (await CustomerModel.distinct('country', { userId: session.user.id })) as string[];
+  const [countries, countryFirstUse] = (await Promise.all([
+    CustomerModel.distinct('country', { userId: session.user.id }),
+    // Countries in the order they were first used, so each keeps its chip colour as new
+    // ones are added. (Aggregations don't cast ids, hence the explicit ObjectId.)
+    CustomerModel.aggregate([
+      { $match: { userId: new Types.ObjectId(session.user.id) } },
+      {
+        $group: {
+          _id: { $toLower: { $trim: { input: '$country' } } },
+          firstUsedAt: { $min: '$createdAt' },
+        },
+      },
+      { $sort: { firstUsedAt: 1, _id: 1 } },
+    ]),
+  ])) as [string[], Array<{ _id: string }>];
+  const countryColors = Object.fromEntries(
+    countryFirstUse.map((row, index) => [row._id, index] as const),
+  );
 
   const tableRows = customers.map((customer) => ({
     id: customer._id.toString(),
@@ -176,10 +189,9 @@ export default async function CustomersPage({
 
   const queryString = new URLSearchParams(
     Object.entries({
-      q: params.q,
       country: params.country,
-      sort: params.sort,
-      order: params.order,
+      from: params.from,
+      to: params.to,
       limit: String(params.limit),
     }).filter(([, value]) => value !== ''),
   ).toString();
@@ -189,7 +201,7 @@ export default async function CustomersPage({
       <Breadcrumbs items={[{ label: 'Workspace', href: '/dashboard' }, { label: 'Customers' }]} />
       <PageHeader
         title="Customers"
-        description="Buyer directory with search, filters, and tenant isolation."
+        description="Your buyers, with their orders, payments and profit history."
         actions={
           <Button asChild className="rounded-xl">
             <Link href="/customers/new">Create Customer</Link>
@@ -197,21 +209,28 @@ export default async function CustomersPage({
         }
       />
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader>
-          <CardTitle className="font-display">Customer Directory</CardTitle>
-          <CardDescription>Search, filter, sort, and paginate through your own records.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle className="font-display">Customer Directory</CardTitle>
+            <CardDescription>
+              Open a customer to see their orders, payments and profit history.
+            </CardDescription>
+          </div>
           <CustomerFilters
-            q={params.q}
             country={params.country}
-            sort={params.sort}
-            order={params.order}
+            from={params.from}
+            to={params.to}
             limit={params.limit}
             countries={countries.sort()}
           />
-          <CustomerTable rows={tableRows} />
-          <CustomerPagination page={params.page} totalPages={totalPages} queryString={queryString} />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <CustomerTable rows={tableRows} countryColors={countryColors} />
+          <CustomerPagination
+            page={params.page}
+            totalPages={totalPages}
+            queryString={queryString}
+          />
         </CardContent>
       </Card>
     </div>

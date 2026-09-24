@@ -2,7 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
 const PUBLIC_PATHS = new Set(['/sign-in', '/sign-up', '/api/health']);
-const PUBLIC_PREFIXES = ['/_next', '/api/auth', '/favicon.ico', '/robots.txt', '/sitemap.xml'];
+const PUBLIC_PREFIXES = [
+  '/_next',
+  '/api/auth',
+  '/favicon.ico',
+  // App icons (src/app/icon.svg, apple-icon.tsx) must load on the sign-in page too.
+  '/icon',
+  '/apple-icon',
+  '/robots.txt',
+  '/sitemap.xml',
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -21,7 +30,10 @@ export async function middleware(request: NextRequest) {
 
   if (!token) {
     const signInUrl = new URL('/sign-in', request.nextUrl.origin);
-    signInUrl.searchParams.set('callbackUrl', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    signInUrl.searchParams.set(
+      'callbackUrl',
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
     return NextResponse.redirect(signInUrl);
   }
 

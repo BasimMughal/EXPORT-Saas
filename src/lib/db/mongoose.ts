@@ -29,7 +29,7 @@ export async function connectMongoose() {
       .connect(env.MONGODB_URI, {
         dbName: env.MONGODB_DB,
         bufferCommands: false,
-        serverSelectionTimeoutMS: 2500,
+        serverSelectionTimeoutMS: 10000,
       })
       .catch((error) => {
         cached.promise = null;
@@ -44,7 +44,8 @@ export async function connectMongoose() {
 export async function tryConnectMongoose() {
   try {
     return await connectMongoose();
-  } catch {
+  } catch (error) {
+    console.error("[mongo] connect failed:", error instanceof Error ? error.message : error);
     return null;
   }
 }

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { filterDateSchema } from '@/lib/filters/date-range';
+
 const optionalText = z.string().trim().max(500, 'Must be 500 characters or fewer').optional();
 
 export const customerSchema = z.object({
@@ -22,6 +24,9 @@ export const customerSchema = z.object({
 export const customerFiltersSchema = z.object({
   q: z.string().trim().max(200).optional().default(''),
   country: z.string().trim().max(80).optional().default(''),
+  /** Created-date range, inclusive. */
+  from: filterDateSchema,
+  to: filterDateSchema,
   sort: z.enum(['createdAt', 'name', 'company', 'country', 'email']).default('createdAt'),
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),

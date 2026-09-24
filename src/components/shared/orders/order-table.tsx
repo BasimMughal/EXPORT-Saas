@@ -1,6 +1,5 @@
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -9,9 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DeleteOrderButton } from '@/components/shared/orders/delete-order-button';
+import { ClickableRow } from '@/components/shared/clickable-row';
 import { OrderStatusBadge } from '@/components/shared/orders/order-status-badge';
-import { deleteOrderAction } from '@/app/(app)/orders/actions';
 import { formatCurrency, formatDateDisplay } from '@/lib/formatters';
 import type { CurrencyCode } from '@/config/currency';
 
@@ -47,16 +45,22 @@ export function OrderTable({ rows }: OrderTableProps) {
             <TableHead>Order Date</TableHead>
             <TableHead>Delivery Date</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length ? (
             rows.map((order) => (
-              <TableRow key={order.id}>
+              <ClickableRow
+                key={order.id}
+                href={`/orders/${order.id}`}
+                label={`Open order ${order.orderNumber}`}
+              >
                 <TableCell className="font-medium">
                   <div className="space-y-1">
-                    <Link href={`/orders/${order.id}`} className="hover:underline">
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="whitespace-nowrap text-primary hover:underline"
+                    >
                       {order.orderNumber}
                     </Link>
                     {order.notes ? (
@@ -73,30 +77,23 @@ export function OrderTable({ rows }: OrderTableProps) {
                   <p className="font-medium">{order.productName}</p>
                 </TableCell>
                 <TableCell>{order.quantity}</TableCell>
-                <TableCell>{formatCurrency(order.orderValue, order.currency)}</TableCell>
-                <TableCell>{formatDateDisplay(order.orderDate)}</TableCell>
-                <TableCell>{formatDateDisplay(order.deliveryDate)}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {formatCurrency(order.orderValue, order.currency)}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {formatDateDisplay(order.orderDate)}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {formatDateDisplay(order.deliveryDate)}
+                </TableCell>
                 <TableCell>
                   <OrderStatusBadge status={order.status} />
                 </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/orders/${order.id}`}>View</Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/orders/${order.id}/edit`}>Edit</Link>
-                    </Button>
-                    <form action={deleteOrderAction.bind(null, order.id)}>
-                      <DeleteOrderButton />
-                    </form>
-                  </div>
-                </TableCell>
-              </TableRow>
+              </ClickableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell className="py-10 text-center text-muted-foreground" colSpan={9}>
+              <TableCell className="py-10 text-center text-muted-foreground" colSpan={8}>
                 No orders found.
               </TableCell>
             </TableRow>

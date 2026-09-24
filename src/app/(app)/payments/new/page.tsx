@@ -34,14 +34,17 @@ export default async function NewPaymentPage({
         await (async () => {
           await tryConnectMongoose();
           return OrderModel.find({ userId: new Types.ObjectId(session.user.id) })
-            .select('orderNumber productName')
+            .select('orderNumber productName currency')
             .sort({ createdAt: -1 })
             .lean();
         })()
       ).map((o) => ({
         id: String(o._id),
         label: `${o.orderNumber} — ${o.productName}`,
+        currency: o.currency as string | undefined,
       }));
+
+  const lockedOrder = orders.find((order) => order.id === orderId);
 
   return (
     <div className="animate-fade-up space-y-6">
@@ -55,7 +58,11 @@ export default async function NewPaymentPage({
       {useDemo ? <DemoModeBanner /> : null}
       <PageHeader
         title="Add payment"
-        description="Record a single payment or installment against an order."
+        description={
+          lockedOrder
+            ? `Log an advance, installment or final settlement received for ${lockedOrder.label}.`
+            : 'Log an advance, installment or final settlement received from a customer.'
+        }
         actions={
           <Button asChild variant="outline" className="rounded-xl">
             <Link href={orderId ? `/orders/${orderId}` : '/payments'}>Back</Link>
@@ -66,7 +73,7 @@ export default async function NewPaymentPage({
         action={createPaymentAction}
         orders={orders}
         defaultValues={{ orderId }}
-        lockOrderId={Boolean(orderId)}
+        lockOrderId={Boolean(lockedOrder)}
         submitLabel="Save payment"
       />
     </div>

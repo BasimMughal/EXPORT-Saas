@@ -39,7 +39,13 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-export function CustomerForm({ title, description, submitLabel, action, initialValues }: CustomerFormProps) {
+export function CustomerForm({
+  title,
+  description,
+  submitLabel,
+  action,
+  initialValues,
+}: CustomerFormProps) {
   const [state, formAction] = useActionState(action, initialState);
 
   return (
@@ -54,7 +60,9 @@ export function CustomerForm({ title, description, submitLabel, action, initialV
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input id="name" name="name" defaultValue={initialValues?.name ?? ''} />
-              {state.fieldErrors?.name ? <p className="text-sm text-destructive">{state.fieldErrors.name}</p> : null}
+              {state.fieldErrors?.name ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.name}</p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -76,20 +84,31 @@ export function CustomerForm({ title, description, submitLabel, action, initialV
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input id="phone" name="phone" defaultValue={initialValues?.phone ?? ''} />
-              {state.fieldErrors?.phone ? <p className="text-sm text-destructive">{state.fieldErrors.phone}</p> : null}
+              {state.fieldErrors?.phone ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.phone}</p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" defaultValue={initialValues?.email ?? ''} />
-              {state.fieldErrors?.email ? <p className="text-sm text-destructive">{state.fieldErrors.email}</p> : null}
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                defaultValue={initialValues?.email ?? ''}
+              />
+              {state.fieldErrors?.email ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.email}</p>
+              ) : null}
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea id="notes" name="notes" defaultValue={initialValues?.notes ?? ''} />
-            {state.fieldErrors?.notes ? <p className="text-sm text-destructive">{state.fieldErrors.notes}</p> : null}
+            {state.fieldErrors?.notes ? (
+              <p className="text-sm text-destructive">{state.fieldErrors.notes}</p>
+            ) : null}
           </div>
 
           {state.message ? <p className="text-sm text-destructive">{state.message}</p> : null}

@@ -1,12 +1,9 @@
-import { ROLE_PERMISSIONS, type Role } from '@/lib/auth/authorization';
-
 /** Temporary offline demo access — replace with real Mongo users later. */
 export const DEMO_ACCOUNT = {
   id: '000000000000000000000001',
   name: 'Basim Admin',
   email: 'demo@exportflow.com',
   password: 'Demo@12345',
-  role: 'admin' as Role,
   organizationId: null as string | null,
 };
 
@@ -28,9 +25,7 @@ export function matchDemoCredentials(email: string, password: string) {
     id: DEMO_ACCOUNT.id,
     name: DEMO_ACCOUNT.name,
     email: DEMO_ACCOUNT.email,
-    role: DEMO_ACCOUNT.role,
     organizationId: DEMO_ACCOUNT.organizationId,
-    permissions: ROLE_PERMISSIONS[DEMO_ACCOUNT.role],
   };
 }
 
